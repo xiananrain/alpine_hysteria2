@@ -198,7 +198,7 @@ case $TLS_TYPE in
         ;;
 esac
 
-SUBSCRIPTION_LINK="hysteria2://${$PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${SNI_LINK}&alpn=h3&insecure=${INSECURE}#hy2"
+SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${SNI_LINK}&alpn=h3&insecure=${INSECURE}#hy2"
 
 # 显示结果
 echo "------------------------------------------------------------------------"
