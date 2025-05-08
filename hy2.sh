@@ -21,6 +21,22 @@ generate_uuid() {
     echo "${bytes:0:8}-${bytes:8:4}-${byte7}-${byte9}-${bytes:24:12}" | tr '[:upper:]' '[:lower:]'
 }
 
+# 获取服务器地址并格式化
+get_server_address() {
+    local ip=$(curl -s ifconfig.me)
+    if [ -z "$ip" ]; then
+        echo "无法获取服务器 IP 地址，请检查网络连接。"
+        exit 1
+    fi
+    
+    # 判断IPv6地址
+    if [[ "$ip" == *":"* ]]; then
+        echo "[$ip]"
+    else
+        echo "$ip"
+    fi
+}
+
 # 提供默认值
 read -p "请选择 TLS 验证方式 (1. 自定义证书 2. ACME HTTP 验证 3. Cloudflare DNS 验证) [默认1]: " TLS_TYPE
 TLS_TYPE=${TLS_TYPE:-1}
@@ -78,12 +94,8 @@ if [ -z "$PASSWORD" ]; then
   PASSWORD=$(generate_uuid)
 fi
 
-# 获取服务器 IP 地址
-SERVER_IP=$(curl -s ifconfig.me)
-if [ -z "$SERVER_IP" ]; then
-  echo "无法获取服务器 IP 地址，请检查网络连接。"
-  exit 1
-fi
+# 获取服务器地址（自动处理IPv6格式）
+SERVER_ADDRESS=$(get_server_address)
 
 # 生成 Hysteria config.yaml
 echo "正在生成配置文件..."
@@ -170,23 +182,31 @@ service hysteria start
 # 生成订阅链接
 case $TLS_TYPE in
     1)
-        SERVER_ADDRESS="$SERVER_IP"
+        if [[ "$SERVER_ADDRESS" == *"]"* ]]; then
+            # IPv6地址已经包含方括号
+            LINK_ADDRESS="$SERVER_ADDRESS"
+        else
+            LINK_ADDRESS="$SERVER_ADDRESS"
+        fi
         SNI_LINK="$SNI"
         INSECURE=1
         ;;
     2|3)
-        SERVER_ADDRESS="$DOMAIN"
+        LINK_ADDRESS="$DOMAIN"
         SNI_LINK="$DOMAIN"
         INSECURE=0
         ;;
 esac
 
-SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${SERVER_ADDRESS}:${PORT}/?sni=${SNI_LINK}&alpn=h3&insecure=${INSECURE}#hy2"
+# 处理特殊字符编码（虽然UUID不需要，但保留逻辑）
+encoded_password=$(echo -n "$PASSWORD" | curl -Gso /dev/null -w %{url_effective} --data-urlencode @- "" | cut -c3-)
+
+SUBSCRIPTION_LINK="hysteria2://${encoded_password}@${LINK_ADDRESS}:${PORT}/?sni=${SNI_LINK}&alpn=h3&insecure=${INSECURE}#hy2"
 
 # 显示结果
 echo "------------------------------------------------------------------------"
 echo "安装完成！"
-echo "服务器地址: $SERVER_ADDRESS"
+echo "服务器地址: $LINK_ADDRESS"
 echo "端口: $PORT"
 echo "密码(UUID): $PASSWORD"
 echo "SNI: $SNI_LINK"
