@@ -12,7 +12,7 @@ echo "---------------------------------------"
 # --- Prerequisite Installation ---
 echo -e "${YELLOW}Installing necessary packages...${NC}"
 apk update >/dev/null
-REQUIRED_PKGS="wget curl git openssh openssl openrc lsof coreutils" # coreutils for 'realpath'
+REQUIRED_PKGS="wget curl git openssl openrc lsof coreutils" # coreutils for 'realpath'
 for pkg in $REQUIRED_PKGS; do
     if ! apk info -e $pkg &>/dev/null; then
         echo "Installing $pkg..."
