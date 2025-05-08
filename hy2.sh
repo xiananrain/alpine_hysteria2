@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # 安装必要的软件包
-apk add wget curl git openssh openssl openrc libcap
+apk add wget curl git openssh openssl openrc libcap || {
+    echo -e "\033[31m错误：软件包安装失败，请检查网络连接！\033[0m"
+    exit 1
+}
 
 # 生成符合RFC 4122的UUIDv4函数
 generate_uuid() {
@@ -46,12 +49,24 @@ case $TLS_TYPE in
         # 自定义证书模式
         read -p "请输入证书路径（留空生成自签名证书）: " CERT_PATH
         if [ -z "$CERT_PATH" ]; then
+            # 二次验证openssl是否存在
+            if ! command -v openssl &> /dev/null; then
+                echo -e "\033[31m错误：openssl未安装，请手动运行 'apk add openssl' 后重试\033[0m"
+                exit 1
+            fi
+            
             read -p "请输入伪装域名（默认 www.bing.com）: " SNI
             SNI=${SNI:-www.bing.com}
             mkdir -p /etc/hysteria/
-            openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+            
+            # 生成证书增加错误处理
+            if ! openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
                 -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
-                -subj "/CN=$SNI" -days 36500
+                -subj "/CN=$SNI" -days 36500; then
+                echo -e "\033[31m错误：证书生成失败，请检查openssl配置！\033[0m"
+                exit 1
+            fi
+            
             CERT_PATH="/etc/hysteria/server.crt"
             KEY_PATH="/etc/hysteria/server.key"
         else
@@ -183,7 +198,6 @@ service hysteria start
 case $TLS_TYPE in
     1)
         if [[ "$SERVER_ADDRESS" == *"]"* ]]; then
-            # IPv6地址已经包含方括号
             LINK_ADDRESS="$SERVER_ADDRESS"
         else
             LINK_ADDRESS="$SERVER_ADDRESS"
