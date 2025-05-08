@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# 安装必要的软件包
-apk add wget curl git openssh openssl openrc libcap
+# 安装必要的软件包（增加util-linux用于生成UUID）
+apk add wget curl git openssh openssl openrc libcap util-linux
 
-# 生成随机密码的函数
-generate_random_password() {
-  dd if=/dev/random bs=18 count=1 status=none | base64
+# 生成UUID格式密码的函数
+generate_uuid_password() {
+  uuidgen | tr '[:upper:]' '[:lower:]'  # 生成小写UUID
 }
 
 # 提供默认值
@@ -59,9 +59,10 @@ esac
 read -p "请输入端口（默认 34567）: " PORT
 PORT=${PORT:-34567}
 
-read -p "请输入密码（回车则使用随机密码）: " PASSWORD
+# 密码处理逻辑
+read -p "请输入密码（回车则使用随机UUID）: " PASSWORD
 if [ -z "$PASSWORD" ]; then
-  PASSWORD="$(generate_random_password)"
+  PASSWORD=$(generate_uuid_password)
 fi
 
 # 获取服务器 IP 地址
@@ -167,14 +168,14 @@ case $TLS_TYPE in
         ;;
 esac
 
-SUBSCRIPTION_LINK="hysteria2://$PASSWORD@$SERVER_ADDRESS:$PORT/?sni=$SNI_LINK&alpn=h3&insecure=$INSECURE#hy2"
+SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${SERVER_ADDRESS}:${PORT}/?sni=${SNI_LINK}&alpn=h3&insecure=${INSECURE}#hy2"
 
 # 显示结果
 echo "------------------------------------------------------------------------"
 echo "安装完成！"
 echo "服务器地址: $SERVER_ADDRESS"
 echo "端口: $PORT"
-echo "密码: $PASSWORD"
+echo "密码(UUID): $PASSWORD"
 echo "SNI: $SNI_LINK"
 echo "订阅链接:"
 echo "$SUBSCRIPTION_LINK"
