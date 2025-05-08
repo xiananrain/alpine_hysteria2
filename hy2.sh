@@ -1,10 +1,7 @@
 #!/bin/bash
 
 # 安装必要的软件包
-apk add wget curl git openssh openssl openrc libcap || {
-    echo -e "\033[31m错误：软件包安装失败，请检查网络连接！\033[0m"
-    exit 1
-}
+apk add wget curl git openssh openssl openrc
 
 # 生成符合RFC 4122的UUIDv4函数
 generate_uuid() {
