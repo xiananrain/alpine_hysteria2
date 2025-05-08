@@ -4,25 +4,23 @@ set -euo pipefail
 # 安装依赖
 apk add --no-cache --update wget curl openssl openrc
 
-# 生成符合 RFC 4648 标准的 Base64 密码（24字符）
+# 生成随机密码（简化版）
 generate_random_password() {
-  dd if=/dev/urandom bs=18 count=1 2>/dev/null | base64 | tr -d '\n' | tr +/ -_
+  dd if=/dev/urandom bs=18 count=1 status=none | base64 | tr -d '\n'
 }
 
 GENPASS="$(generate_random_password)"
 
-# 生成配置文件
+# 生成配置文件（简化注释）
 echo_hysteria_config_yaml() {
   cat << EOF
 listen: :40443
 
 # 有域名且使用ACME证书的配置示例
 #acme:
-#  domains:
-#    - your.domain.com
+#  domains: [your.domain.com]
 #  email: admin@example.com
 
-# 自签名证书配置
 tls:
   cert: /etc/hysteria/server.crt
   key: /etc/hysteria/server.key
@@ -34,12 +32,12 @@ auth:
 masquerade:
   type: proxy
   proxy:
-    url: https://www.bing.com/  # 建议替换为自己的伪装站点
+    url: https://bing.com/
     rewriteHost: true
 EOF
 }
 
-# 生成OpenRC服务文件（添加资源限制和日志配置）
+# 简化服务文件
 echo_hysteria_autoStart() {
   cat << EOF
 #!/sbin/openrc-run
@@ -49,29 +47,22 @@ description="Hysteria VPN Service"
 
 command="/usr/local/bin/hysteria"
 command_args="server --config /etc/hysteria/config.yaml"
-command_user="root:root"
+command_background="yes"
 
 pidfile="/var/run/\${name}.pid"
-respawn_max=5
-respawn_delay=10
 
 depend() {
   need net
-  use dns
 }
-
-start_pre() {
-  checkpath -d -m 0755 /var/log/hysteria
-}
-
-logger -t "hysteria[\\\${RC_SVCNAME}]" -p local0.info
 EOF
 }
 
-# 下载官方二进制文件（指定明确版本以提高稳定性）
-HYSTERIA_VERSION="latest"
-HYSTERIA_URL="https://download.hysteria.network/app/${HYSTERIA_VERSION}/hysteria-linux-amd64"
-wget --show-progress -qO /usr/local/bin/hysteria "$HYSTERIA_URL" || {
+# 下载最新版（添加重试逻辑）
+for i in {1..3}; do
+  wget --show-progress -qO /usr/local/bin/hysteria \
+    "https://download.hysteria.network/app/latest/hysteria-linux-amd64" && break
+  sleep 3
+done || {
   echo "错误：文件下载失败！" >&2
   exit 1
 }
@@ -80,12 +71,12 @@ chmod +x /usr/local/bin/hysteria
 # 创建配置目录
 mkdir -p /etc/hysteria
 
-# 生成ECDSA证书（P-256曲线，有效期100年）
+# 生成证书（简化参数）
 openssl req -x509 -nodes \
   -newkey ec:<(openssl ecparam -name prime256v1) \
   -keyout /etc/hysteria/server.key \
   -out /etc/hysteria/server.crt \
-  -subj "/CN=www.bing.com" \
+  -subj "/CN=bing.com" \
   -days 36500 || {
   echo "错误：证书生成失败！" >&2
   exit 1
@@ -94,57 +85,24 @@ openssl req -x509 -nodes \
 # 写入配置文件
 echo_hysteria_config_yaml > /etc/hysteria/config.yaml
 
-# 配置服务管理
+# 配置服务
 echo_hysteria_autoStart > /etc/init.d/hysteria
 chmod 755 /etc/init.d/hysteria
 
-# 启用并启动服务
-rc-update add hysteria default >/dev/null 2>&1
-if ! service hysteria start; then
-  echo "错误：服务启动失败！检查配置后重试" >&2
-  exit 1
-fi
+# 启用服务
+rc-update add hysteria
+service hysteria start
 
-# 验证服务状态
-sleep 2
-service hysteria status || {
-  echo "警告：服务似乎未正常运行，检查日志：journalctl -u hysteria" >&2
-}
-
-# 显示安装结果
+# 输出安装信息
 cat << EOF
+------------------------------------------------------------------------
+hysteria2 安装完成
+端口: 40443
+密码: $GENPASS
+SNI: bing.com
 
- /$$   /$$ /$$     /$$/$$$$$$  /$$$$$$$$/$$$$$$$$ /$$$$$$$  /$$$$$$  /$$$$$$   /$$$$$$ 
-| $$  | $$|  $$   /$$/$$__  $$|__  $$__/ $$_____/| $$__  $$|_  $$_/ /$$__  $$ /$$__  $$
-| $$  | $$ \  $$ /$$/ $$  \__/   | $$  | $$      | $$  \ $$  | $$  | $$  \ $$|__/  \ $$
-| $$$$$$$$  \  $$$$/|  $$$$$$    | $$  | $$$$$   | $$$$$$$/  | $$  | $$$$$$$$  /$$$$$$/
-| $$__  $$   \  $$/  \____  $$   | $$  | $$__/   | $$__  $$  | $$  | $$__  $$ /$$____/ 
-| $$  | $$    | $$   /$$  \ $$   | $$  | $$      | $$  \ $$  | $$  | $$  | $$| $$      
-| $$  | $$    | $$  |  $$$$$$/   | $$  | $$$$$$$$| $$  | $$ /$$$$$$| $$  | $$| $$$$$$$$
-|__/  |__/    |__/   \______/    |__/  |________/|__/  |__/|______/|__/  |__/|________/
-                                                                                                                                                                        
-
-✅ 安装完成！配置文件路径：/etc/hysteria/config.yaml
-
-▸ 服务器端口：40443/udp
-▸ 认证密码：${GENPASS}
-▸ TLS SNI：www.bing.com
-▸ 传输类型：QUIC（伪装为HTTPS流量）
-
-📌 客户端配置示例（hy3）：
-{
-  "server": "your_ip:40443",
-  "auth": "[密码]",
-  "tls": {
-    "sni": "www.bing.com",
-    "insecure": true
-  },
-  // ...其他客户端参数
-}
-
-🛠 管理命令：
-service hysteria status  # 查看状态
-service hysteria restart # 重启服务
-journalctl -u hysteria   # 查看日志
-
+配置文件: /etc/hysteria/config.yaml
+服务状态: service hysteria status
+重启服务: service hysteria restart
+------------------------------------------------------------------------
 EOF
