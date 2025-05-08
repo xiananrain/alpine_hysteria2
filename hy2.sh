@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# 安装必要的软件包
-apk add wget curl git openssh openssl openrc util-linux
+# 安装必要的软件包，包括 libuuid 以支持 uuidgen
+apk add wget curl git openssh openssl openrc libuuid
 
-# 提示用户输入自定义参数，提供默认值
+# 提供默认值
 read -p "请输入端口（默认 34567）: " PORT
 PORT=${PORT:-34567}
 
 # 生成随机 UUID 作为密码
 PASSWORD=$(uuidgen)
-echo "生成的 UUID 密码: $PASSWORD"
+echo "生成的 UUID: $PASSWORD"
 
 read -p "请输入伪装域名（默认 www.bing.com）: " SNI
 SNI=${SNI:-www.bing.com}
@@ -90,7 +90,7 @@ rc-update add hysteria
 # 启动 Hysteria 服务
 service hysteria start
 
-# 生成 Hysteria 2 订阅链接（使用用户提供的格式）
+# 生成 Hysteria 2 订阅链接
 SUBSCRIPTION_LINK="hysteria2://$PASSWORD@$SERVER_IP:$PORT/?sni=$SNI&alpn=h3&insecure=1#hy2"
 
 # 输出安装摘要和卸载说明
