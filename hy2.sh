@@ -6,17 +6,17 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # 无颜色
 
-echo -e "${YELLOW}Hysteria 2 Alpine Linux 安装脚本 (带自动重启功能)${NC}"
+echo -e "${YELLOW}Hysteria 2 Alpine Linux 安装脚本${NC}"
 echo "---------------------------------------"
 
 # --- 依赖包安装 ---
 echo -e "${YELLOW}正在安装必要的软件包...${NC}" >&2
 apk update >/dev/null
-REQUIRED_PKGS="wget curl git openssl openrc lsof coreutils libcap"
+REQUIRED_PKGS="wget curl git openssl openrc lsof coreutils" 
 for pkg in $REQUIRED_PKGS; do
     if ! apk info -e $pkg &>/dev/null; then
         echo "正在安装 $pkg..." >&2
-        if ! apk add $pkg > /dev/null; then
+        if ! apk add $pkg > /dev/null; then 
             echo -e "${RED}错误: 安装 $pkg 失败。请手动安装后重试。${NC}" >&2
             exit 1
         fi
@@ -50,16 +50,16 @@ get_server_address() {
     local ipv6_ip
     local ipv4_ip
 
-    echo "正在检测服务器公网 IP 地址..." >&2
+    echo "正在检测服务器公网 IP 地址..." >&2 
     # 首先尝试获取IPv6地址
-    echo "尝试获取 IPv6 地址..." >&2
+    echo "尝试获取 IPv6 地址..." >&2 
     ipv6_ip=$(curl -s -m 5 -6 ifconfig.me || curl -s -m 5 -6 ip.sb || curl -s -m 5 -6 api64.ipify.org)
     if [ -n "$ipv6_ip" ] && [[ "$ipv6_ip" == *":"* ]]; then # 检查是否是有效的IPv6地址
-        echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}" >&2
-        echo "[$ipv6_ip]"
+        echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}" >&2 
+        echo "[$ipv6_ip]" # 这是实际返回给调用者的值，输出到标准输出流
         return
     else
-        echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}" >&2
+        echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}" >&2 
     fi
 
     # 如果未找到IPv6或获取失败，则尝试获取IPv4地址
@@ -109,7 +109,7 @@ case $TLS_TYPE in
             read -p "请输入用于自签名证书的伪装域名 (默认 www.bing.com): " SELF_SIGN_SNI
             SELF_SIGN_SNI=${SELF_SIGN_SNI:-"www.bing.com"} # 默认自签名SNI
             SNI="$SELF_SIGN_SNI"
-
+            
             mkdir -p /etc/hysteria/certs # 创建证书存放目录
             CERT_PATH="/etc/hysteria/certs/server.crt" # 自签名证书路径
             KEY_PATH="/etc/hysteria/certs/server.key" # 自签名私钥路径
@@ -213,8 +213,8 @@ echo -e "${GREEN}Hysteria 下载并设置权限完成: $HYSTERIA_BIN${NC}" >&2
 if [ "$TLS_TYPE" -eq 2 ]; then
     echo "为 Hysteria 二进制文件设置 cap_net_bind_service 权限..." >&2
     if ! command -v setcap &>/dev/null; then # 检查setcap命令是否存在
-        echo -e "${YELLOW}setcap 命令未找到，尝试安装 libcap... (已在依赖中添加)${NC}" >&2
-        # apk add libcap --no-cache >/dev/null # 安装libcap包 (已在脚本开头安装)
+        echo -e "${YELLOW}setcap 命令未找到，尝试安装 libcap...${NC}" >&2
+        apk add libcap --no-cache >/dev/null # 安装libcap包
     fi
     if ! setcap 'cap_net_bind_service=+ep' "$HYSTERIA_BIN"; then # 设置权限
         echo -e "${RED}错误: setcap 失败。ACME HTTP 验证可能无法工作。${NC}" >&2
@@ -267,63 +267,42 @@ echo -e "${GREEN}配置文件生成完毕。${NC}" >&2
 echo -e "${YELLOW}正在创建 OpenRC 服务文件 /etc/init.d/hysteria...${NC}" >&2
 cat > /etc/init.d/hysteria << EOF
 #!/sbin/openrc-run
-name="hysteria"
-supervisor="supervise-daemon" # 使用 supervise-daemon 进行进程管理
-
+name="hysteria" # 服务名称
 command="/usr/local/bin/hysteria" # Hysteria可执行文件路径
 command_args="server --config /etc/hysteria/config.yaml" # Hysteria启动参数
-
 pidfile="/var/run/\${name}.pid" # PID文件路径
+command_background="yes" # 后台运行
 output_log="/var/log/hysteria.log" # 标准输出日志
 error_log="/var/log/hysteria.error.log" # 错误输出日志
 
-# supervise-daemon 重启参数
-# respawn_max: 在 respawn_period 秒内最大重启次数，0 表示无限次
-# respawn_period: 监控周期，秒
-# respawn_delay: 进程崩溃后，等待多少秒再尝试重启 (可选, 默认0)
-# 如果希望进程崩溃后总是重启，可以将 respawn_max 设置为 0
-respawn_max_retries=0  # 无限次重启
-respawn_period_secs=5 # 每5秒检查一次，如果进程不在则尝试重启
-
-depend() {
-  need net
-  after firewall
+depend() { # 依赖项
+  need net      # 需要网络服务
+  after firewall # 在防火墙服务之后启动
 }
 
-start_pre() {
-  checkpath -f \$output_log -m 0644 -o hysteria:hysteria # 假设hysteria用户和组存在，如果不存在则使用 root:root
-  checkpath -f \$error_log -m 0644 -o hysteria:hysteria # 或者根据实际运行用户调整
-  # 如果不指定用户运行，可以去掉 -o hysteria:hysteria
-  # checkpath -f \$output_log -m 0644
-  # checkpath -f \$error_log -m 0644
+start_pre() { # 启动前执行的命令
+  checkpath -f \$output_log -m 0644 # 检查并创建日志文件，设置权限
+  checkpath -f \$error_log -m 0644 # 检查并创建错误日志文件，设置权限
 }
 
-start() {
-  ebegin "Starting \$name"
-  # 使用 supervise-daemon 启动并监控进程
-  # $name 是 supervise-daemon 用来标识此受监管进程的名称
-  # $command 是要执行的程序
-  # -- $command_args 是传递给 $command 的参数
-  "$supervisor" "\$name" --start \\
-    --pidfile "\$pidfile" \\
-    --stdout "\$output_log" --stderr "\$error_log" \\
-    --respawn-max "\$respawn_max_retries" --respawn-period "\$respawn_period_secs" \\
-    "$command" -- $command_args # 注意这里的 -- 用来分隔 supervise-daemon 的参数和被执行命令的参数
-  eend \$? "Failed to start \$name"
+start() { # 启动服务函数
+  ebegin "Starting \$name" # 开始启动服务的提示
+  start-stop-daemon --start --quiet --background \\
+    --make-pidfile --pidfile \$pidfile \\
+    --stdout \$output_log --stderr \$error_log \\
+    --exec \$command -- \$command_args # 启动进程
+  eend \$? # 结束启动服务的提示，并显示结果
 }
 
-stop() {
-    ebegin "Stopping \$name"
-    # 使用 supervise-daemon 来停止由它管理的进程
-    "$supervisor" "\$name" --stop --pidfile "\$pidfile"
-    eend \$? "Failed to stop \$name"
+stop() { # 停止服务函数
+    ebegin "Stopping \$name" # 开始停止服务的提示
+    start-stop-daemon --stop --quiet --pidfile \$pidfile # 停止进程
+    eend \$? # 结束停止服务的提示，并显示结果
 }
-
-# status() 函数通常由 OpenRC 的 /lib/rc/sh/rc-process.sh 自动提供
-# 它会基于 pidfile 检查进程状态
+# restart 命令由OpenRC通过调用stop然后start来处理
 EOF
 chmod +x /etc/init.d/hysteria # 赋予服务文件执行权限
-echo -e "${GREEN}OpenRC 服务文件创建成功 (使用 supervise-daemon 进行进程守护)。${NC}" >&2
+echo -e "${GREEN}OpenRC 服务文件创建成功。${NC}" >&2
 
 # --- 启用并启动服务 ---
 echo -e "${YELLOW}正在启用并启动 Hysteria 服务...${NC}" >&2
@@ -341,7 +320,6 @@ echo -e "${GREEN}等待服务启动...${NC}" >&2; sleep 3 # 等待片刻让服�
 # --- 显示结果 ---
 if service hysteria status | grep -q "started"; then # 检查服务状态
     echo -e "${GREEN}Hysteria 服务已成功启动！${NC}"
-    echo -e "${GREEN}服务将由 supervise-daemon 守护，进程意外退出后会自动尝试重启。${NC}"
 else
     echo -e "${RED}Hysteria 服务状态异常。请检查日志:${NC}"
     echo "  输出日志: tail -n 20 /var/log/hysteria.log"
@@ -389,5 +367,5 @@ echo "  cat /etc/hysteria/config.yaml - 查看配置文件"
 echo "  tail -f /var/log/hysteria.log - 查看实时日志"
 echo "  tail -f /var/log/hysteria.error.log - 查看实时错误日志"
 echo "一键卸载命令："
-echo "  service hysteria stop ; rc-update del hysteria default ; rm -f /etc/init.d/hysteria ; rm -f /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm -f hy2.sh ; rm -f /var/log/hysteria.log ; rm -f /var/log/hysteria.error.log"
+echo "  service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh"
 echo "------------------------------------------------------------------------"
