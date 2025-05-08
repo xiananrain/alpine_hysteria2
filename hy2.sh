@@ -12,18 +12,7 @@ echo "---------------------------------------"
 # --- Prerequisite Installation ---
 echo -e "${YELLOW}Installing necessary packages...${NC}"
 apk update >/dev/null
-REQUIRED_PKGS="apk add openssl" # coreutils for 'realpath'
-for pkg in $REQUIRED_PKGS; do
-    if ! apk info -e $pkg &>/dev/null; then
-        echo "Installing $pkg..."
-        if ! apk add $pkg; then
-            echo -e "${RED}Error: Failed to install $pkg. Please install it manually and retry.${NC}"
-            exit 1
-        fi
-    else
-        echo "$pkg is already installed."
-    fi
-done
+apk add openssl
 echo -e "${GREEN}Dependencies installed successfully.${NC}"
 
 # --- Helper Functions ---
