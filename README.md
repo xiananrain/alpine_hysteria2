@@ -7,7 +7,7 @@
 使用下面的命令一键安装并启动 hysteria2：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/1TIME1/alpine_hy2/main/hy2.sh | sh
+curl -fsSL https://raw.githubusercontent.com/1TIME1/alpine_hy2/main/hy2.sh -o hy2.sh && chmod +x hy2.sh && sh hy2.sh
 ```
 
 ## 功能特点
@@ -68,7 +68,7 @@ hysteria2://<password>@<server_ip>:<port>/?sni=<sni>&alpn=h3&insecure=1#hy2
 
 默认卸载命令：
 ```bash
-service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh ; rm .wget-hsts
+service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh
 ```
 
 ## 贡献指南
