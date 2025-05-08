@@ -11,41 +11,37 @@ generate_random_password() {
 
 GENPASS="$(generate_random_password)"
 
-# 生成配置文件
+# 生成 Hysteria 2 配置文件
 echo_hysteria_config_yaml() {
   cat << EOF
 listen: :40443
 
-# 有域名且使用ACME证书的配置示例
-#acme:
-#  domains:
-#    - your.domain.com
-#  email: admin@example.com
-
-# 自签名证书配置
 tls:
   cert: /etc/hysteria/server.crt
   key: /etc/hysteria/server.key
 
 auth:
-  type: password
-  password: $GENPASS
+  users:
+    - name: user
+      password: $GENPASS
 
 masquerade:
-  type: proxy
-  proxy:
-    url: https://www.bing.com/  # 建议替换为自己的伪装站点
-    rewriteHost: true
+  type: http
+  http:
+    listen: :80
+    handler: file_server
+    path: /
+    content: "Hello from Hysteria 2 Masquerade!"
 EOF
 }
 
-# 生成OpenRC服务文件（添加资源限制和日志配置）
+# 生成 OpenRC 服务文件
 echo_hysteria_autoStart() {
   cat << EOF
 #!/sbin/openrc-run
 
 name="hysteria"
-description="Hysteria VPN Service"
+description="Hysteria 2 VPN Service"
 
 command="/usr/local/bin/hysteria"
 command_args="server --config /etc/hysteria/config.yaml"
@@ -68,9 +64,9 @@ logger -t "hysteria[\\\${RC_SVCNAME}]" -p local0.info
 EOF
 }
 
-# 下载官方二进制文件（指定明确版本以提高稳定性）
-HYSTERIA_VERSION="latest"
-HYSTERIA_URL="https://download.hysteria.network/app/${HYSTERIA_VERSION}/hysteria-linux-amd64"
+# 下载官方二进制文件（指定 Hysteria 2 版本）
+HYSTERIA_VERSION="v2.2.2"
+HYSTERIA_URL="https://github.com/apernet/hysteria/releases/download/${HYSTERIA_VERSION}/hysteria-linux-amd64"
 wget --show-progress -qO /usr/local/bin/hysteria "$HYSTERIA_URL" || {
   echo "错误：文件下载失败！" >&2
   exit 1
@@ -80,7 +76,7 @@ chmod +x /usr/local/bin/hysteria
 # 创建配置目录
 mkdir -p /etc/hysteria
 
-# 生成ECDSA证书（P-256曲线，有效期100年）
+# 生成 ECDSA 证书（P-256 曲线，有效期 100 年）
 openssl req -x509 -nodes \
   -newkey ec:<(openssl ecparam -name prime256v1) \
   -keyout /etc/hysteria/server.key \
@@ -127,14 +123,18 @@ cat << EOF
 ✅ 安装完成！配置文件路径：/etc/hysteria/config.yaml
 
 ▸ 服务器端口：40443/udp
+▸ 认证用户：user
 ▸ 认证密码：${GENPASS}
 ▸ TLS SNI：www.bing.com
-▸ 传输类型：QUIC（伪装为HTTPS流量）
+▸ 伪装站点：监听在 80 端口的 HTTP 服务
 
-📌 客户端配置示例（hy3）：
+📌 客户端配置示例（Hysteria 2）：
 {
   "server": "your_ip:40443",
-  "auth": "[密码]",
+  "auth": {
+    "user": "user",
+    "password": "${GENPASS}"
+  },
   "tls": {
     "sni": "www.bing.com",
     "insecure": true
