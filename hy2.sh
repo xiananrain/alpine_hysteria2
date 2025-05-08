@@ -100,7 +100,7 @@ ACME_EMAIL="" # ACME申请证书的邮箱
 case $TLS_TYPE in
     1) # 自定义证书模式
         echo -e "${YELLOW}--- 自定义证书模式 ---${NC}" >&2
-        read -p "请输入证书 (.crt) 文件绝对路径 (留空则生成自签名证书): " USER_CERT_PATH
+        read -p "请输入证书 (.crt) 文件绝对路径 (回车则生成自签名证书): " USER_CERT_PATH
         if [ -z "$USER_CERT_PATH" ]; then # 如果用户未提供证书路径，则生成自签名证书
             if ! command -v openssl &> /dev/null; then # 检查openssl命令是否存在
                 echo -e "${RED}错误: openssl 未安装，请手动运行 'apk add openssl' 后重试${NC}" >&2
@@ -175,7 +175,7 @@ case $TLS_TYPE in
         ;;
 esac
 
-read -p "请输入 Hysteria 监听端口 (默认 $DEFAULT_PORT): " PORT
+read -p "请输入 Hysteria 端口 (默认 $DEFAULT_PORT): " PORT
 PORT=${PORT:-$DEFAULT_PORT} # 如果用户未输入，则使用默认端口
 
 read -p "请输入 Hysteria 密码 (回车则使用随机UUID): " PASSWORD
