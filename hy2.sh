@@ -1,11 +1,15 @@
 #!/bin/bash
 
-# 安装必要的软件包（增加util-linux用于生成UUID）
-apk add wget curl git openssh openssl openrc libcap util-linux
+# 安装必要的软件包（Alpine Linux需要安装uuidgen）
+apk add wget curl git openssh openssl openrc libcap util-linux uuidgen
 
 # 生成UUID格式密码的函数
 generate_uuid_password() {
   uuidgen | tr '[:upper:]' '[:lower:]'  # 生成小写UUID
+  if [ $? -ne 0 ]; then
+    echo -e "\033[31m错误：UUID生成失败，请确保已安装uuidgen\033[0m"
+    exit 1
+  fi
 }
 
 # 提供默认值
@@ -62,7 +66,7 @@ PORT=${PORT:-34567}
 # 密码处理逻辑
 read -p "请输入密码（回车则使用随机UUID）: " PASSWORD
 if [ -z "$PASSWORD" ]; then
-  PASSWORD=$(generate_uuid_password)
+  PASSWORD=$(generate_uuid_password) || exit 1
 fi
 
 # 获取服务器 IP 地址
