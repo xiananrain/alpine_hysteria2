@@ -77,7 +77,7 @@ service hysteria stop && rc-update del hysteria && rm /etc/init.d/hysteria && rm
 请将 `/path/to/hy2.sh` 替换为脚本的实际路径。
 
 ## 贡献指南
-基于https://github.com/zrlhk/alpine-hysteria2修改
+基于 https://github.com/zrlhk/alpine-hysteria2 修改。
 
 如果您有任何改进建议或发现了 bug，欢迎提交 Issue 或 Pull Request。
 
