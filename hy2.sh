@@ -66,7 +66,7 @@ EOF
 
 # 下载官方二进制文件（指定 Hysteria 2 版本）
 HYSTERIA_VERSION="v2.2.2"
-HYSTERIA_URL="https://github.com/apernet/hysteria/releases/download/${HYSTERIA_VERSION}/hysteria-linux-amd64"
+HYSTERIA_URL="https://download.hysteria.network/app/${HYSTERIA_VERSION}/hysteria-linux-amd64"
 wget --show-progress -qO /usr/local/bin/hysteria "$HYSTERIA_URL" || {
   echo "错误：文件下载失败！" >&2
   exit 1
