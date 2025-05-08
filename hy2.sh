@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 安装必要的软件包
-apk add wget curl git openssh openssl openrc
+apk add wget curl git openssh openssl openrc libcap
 
 # 生成随机密码的函数
 generate_random_password() {
@@ -9,6 +9,53 @@ generate_random_password() {
 }
 
 # 提供默认值
+read -p "请选择 TLS 验证方式 (1. 自定义证书 2. ACME HTTP 验证 3. Cloudflare DNS 验证) [默认1]: " TLS_TYPE
+TLS_TYPE=${TLS_TYPE:-1}
+
+case $TLS_TYPE in
+    1)
+        # 自定义证书模式
+        read -p "请输入证书路径（留空生成自签名证书）: " CERT_PATH
+        if [ -z "$CERT_PATH" ]; then
+            read -p "请输入伪装域名（默认 www.bing.com）: " SNI
+            SNI=${SNI:-www.bing.com}
+            mkdir -p /etc/hysteria/
+            openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+                -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
+                -subj "/CN=$SNI" -days 36500
+            CERT_PATH="/etc/hysteria/server.crt"
+            KEY_PATH="/etc/hysteria/server.key"
+        else
+            read -p "请输入私钥路径: " KEY_PATH
+            SNI=$(openssl x509 -noout -subject -in $CERT_PATH | awk -F= '{print $NF}' | tr -d ' ')
+        fi
+        ;;
+    2)
+        # ACME HTTP 模式
+        read -p "请输入域名: " DOMAIN
+        SNI=$DOMAIN
+        # 检查 80 端口占用并设置权限
+        if netstat -tuln | grep -q ':80 '; then
+            echo -e "\033[31m检测到 80 端口被占用，尝试释放端口...\033[0m"
+            apk add lsof
+            PID=$(lsof -t -i:80)
+            [ -n "$PID" ] && kill -9 $PID
+        fi
+        setcap 'cap_net_bind_service=+ep' /usr/local/bin/hysteria
+        ;;
+    3)
+        # Cloudflare DNS 模式
+        read -p "请输入域名: " DOMAIN
+        read -p "请输入邮箱: " EMAIL
+        read -p "请输入 Cloudflare API Token: " CF_TOKEN
+        SNI=$DOMAIN
+        ;;
+    *)
+        echo "无效选项，使用自定义证书模式"
+        TLS_TYPE=1
+        ;;
+esac
+
 read -p "请输入端口（默认 34567）: " PORT
 PORT=${PORT:-34567}
 
@@ -17,9 +64,6 @@ if [ -z "$PASSWORD" ]; then
   PASSWORD="$(generate_random_password)"
 fi
 
-read -p "请输入伪装域名（默认 www.bing.com）: " SNI
-SNI=${SNI:-www.bing.com}
-
 # 获取服务器 IP 地址
 SERVER_IP=$(curl -s ifconfig.me)
 if [ -z "$SERVER_IP" ]; then
@@ -27,30 +71,10 @@ if [ -z "$SERVER_IP" ]; then
   exit 1
 fi
 
-# 判断 IP 版本并调整订阅链接格式
-if echo "$SERVER_IP" | grep -q ":"; then
-  # IPv6
-  SERVER_IP_FOR_LINK="[$SERVER_IP]"
-else
-  # IPv4
-  SERVER_IP_FOR_LINK="$SERVER_IP"
-fi
-
-# 生成 Hysteria config.yaml 的函数
-echo_hysteria_config_yaml() {
-  cat << EOF
+# 生成 Hysteria config.yaml
+echo "正在生成配置文件..."
+cat > /etc/hysteria/config.yaml << EOF
 listen: :$PORT
-
-# 有域名时使用 CA 证书（默认注释掉）
-#acme:
-#  domains:
-#    - test.heybro.bid # 你的域名，需要先解析到服务器 IP
-#  email: xxx@gmail.com
-
-# 使用自签名证书
-tls:
-  cert: /etc/hysteria/server.crt
-  key: /etc/hysteria/server.key
 
 auth:
   type: password
@@ -62,70 +86,96 @@ masquerade:
     url: https://$SNI/
     rewriteHost: true
 EOF
-}
 
-# 生成 OpenRC 自启动脚本的函数
-echo_hysteria_autoStart() {
-  cat << EOF
+case $TLS_TYPE in
+    1)
+        cat >> /etc/hysteria/config.yaml << EOF
+tls:
+  cert: $CERT_PATH
+  key: $KEY_PATH
+EOF
+        ;;
+    2)
+        cat >> /etc/hysteria/config.yaml << EOF
+acme:
+  domains:
+    - $DOMAIN
+  email: admin@$DOMAIN
+EOF
+        ;;
+    3)
+        cat >> /etc/hysteria/config.yaml << EOF
+acme:
+  domains:
+    - $DOMAIN
+  email: $EMAIL
+  dns:
+    provider: cloudflare
+    cloudflare_api_token: $CF_TOKEN
+EOF
+        ;;
+esac
+
+# 下载 Hysteria 并设置权限
+echo "正在下载 Hysteria..."
+wget -O /usr/local/bin/hysteria https://download.hysteria.network/app/latest/hysteria-linux-amd64
+chmod +x /usr/local/bin/hysteria
+
+# 创建服务文件
+echo "正在配置服务..."
+cat > /etc/init.d/hysteria << EOF
 #!/sbin/openrc-run
 
 name="hysteria"
-
 command="/usr/local/bin/hysteria"
 command_args="server --config /etc/hysteria/config.yaml"
-
 pidfile="/var/run/\${name}.pid"
-
 command_background="yes"
 
 depend() {
   need networking
 }
-EOF
+
+start_pre() {
+  checkpath -f /var/log/hysteria.log
 }
 
-# 下载 Hysteria 二进制文件并赋予执行权限
-wget -O /usr/local/bin/hysteria https://download.hysteria.network/app/latest/hysteria-linux-amd64 --no-check-certificate
-chmod +x /usr/local/bin/hysteria
+start() {
+  ebegin "Starting \$name"
+  start-stop-daemon --start --quiet --background \\
+    --make-pidfile --pidfile \$pidfile \\
+    --exec \$command -- \$command_args &> /var/log/hysteria.log
+  eend \$?
+}
+EOF
 
-# 创建 Hysteria 配置文件目录
-mkdir -p /etc/hysteria/
-
-# 生成自签名 TLS 证书
-openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=$SNI" -days 36500
-
-# 写入配置文件
-echo_hysteria_config_yaml > "/etc/hysteria/config.yaml"
-
-# 写入并配置自启动脚本
-echo_hysteria_autoStart > "/etc/init.d/hysteria"
 chmod +x /etc/init.d/hysteria
 rc-update add hysteria
-
-# 启动 Hysteria 服务
 service hysteria start
 
-# 生成 Hysteria 2 订阅链接
-SUBSCRIPTION_LINK="hysteria2://$PASSWORD@$SERVER_IP_FOR_LINK:$PORT/?sni=$SNI&alpn=h3&insecure=1#hy2"
+# 生成订阅链接
+case $TLS_TYPE in
+    1)
+        SERVER_ADDRESS="$SERVER_IP"
+        SNI_LINK="$SNI"
+        INSECURE=1
+        ;;
+    2|3)
+        SERVER_ADDRESS="$DOMAIN"
+        SNI_LINK="$DOMAIN"
+        INSECURE=0
+        ;;
+esac
 
-# 获取脚本的绝对路径
-SCRIPT_PATH=$(realpath "$0")
+SUBSCRIPTION_LINK="hysteria2://$PASSWORD@$SERVER_ADDRESS:$PORT/?sni=$SNI_LINK&alpn=h3&insecure=$INSECURE#hy2"
 
-# 输出安装摘要和卸载说明
+# 显示结果
 echo "------------------------------------------------------------------------"
-echo "hysteria2 已安装完成"
-echo "端口：$PORT，密码（UUID）：$PASSWORD，伪装域名（SNI）：$SNI"
-echo "配置文件：/etc/hysteria/config.yaml"
-echo "已设置为随系统自动启动"
-echo "查看状态：service hysteria status"
-echo "重启服务：service hysteria restart"
-echo "------------------------------------------------------------------------"
-echo "一键复制粘贴到支持 Hysteria 2 的客户端的订阅链接："
+echo "安装完成！"
+echo "服务器地址: $SERVER_ADDRESS"
+echo "端口: $PORT"
+echo "密码: $PASSWORD"
+echo "SNI: $SNI_LINK"
+echo "订阅链接:"
 echo "$SUBSCRIPTION_LINK"
-echo "注意：如果您的 V2Ray 客户端不支持 Hysteria 2，请使用支持该协议的客户端。"
-echo "------------------------------------------------------------------------"
-echo "一键卸载 Hysteria 2 的命令："
-echo "service hysteria stop && rc-update del hysteria && rm /etc/init.d/hysteria && rm /usr/local/bin/hysteria && rm -rf /etc/hysteria && rm $SCRIPT_PATH"
-echo "------------------------------------------------------------------------"
-echo "请享用。"
 echo "------------------------------------------------------------------------"
