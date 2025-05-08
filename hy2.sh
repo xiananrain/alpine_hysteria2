@@ -1,15 +1,24 @@
 #!/bin/bash
 
-# 安装必要的软件包（Alpine Linux需要安装uuidgen）
-apk add wget curl git openssh openssl openrc libcap util-linux uuidgen
+# 安装必要的软件包
+apk add wget curl git openssh openssl openrc libcap
 
-# 生成UUID格式密码的函数
-generate_uuid_password() {
-  uuidgen | tr '[:upper:]' '[:lower:]'  # 生成小写UUID
-  if [ $? -ne 0 ]; then
-    echo -e "\033[31m错误：UUID生成失败，请确保已安装uuidgen\033[0m"
-    exit 1
-  fi
+# 生成符合RFC 4122的UUIDv4函数
+generate_uuid() {
+    # 生成16字节随机数据
+    local bytes=$(od -x -N 16 /dev/urandom | head -1 | awk '{OFS=""; $1=""; print}')
+    
+    # 设置版本号（第7字节设为4）和变体位（第9字节开头两位为10）
+    local byte7=${bytes:12:4}
+    byte7=$((0x${byte7} & 0x0fff | 0x4000))
+    byte7=$(printf "%04x" $byte7)
+    
+    local byte9=${bytes:20:4}
+    byte9=$((0x${byte9} & 0x3fff | 0x8000))
+    byte9=$(printf "%04x" $byte9)
+    
+    # 组合UUID各部分
+    echo "${bytes:0:8}-${bytes:8:4}-${byte7}-${byte9}-${bytes:24:12}" | tr '[:upper:]' '[:lower:]'
 }
 
 # 提供默认值
@@ -66,7 +75,7 @@ PORT=${PORT:-34567}
 # 密码处理逻辑
 read -p "请输入密码（回车则使用随机UUID）: " PASSWORD
 if [ -z "$PASSWORD" ]; then
-  PASSWORD=$(generate_uuid_password) || exit 1
+  PASSWORD=$(generate_uuid)
 fi
 
 # 获取服务器 IP 地址
