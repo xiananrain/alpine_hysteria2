@@ -68,7 +68,7 @@ hysteria2://<password>@<server_ip>:<port>/?sni=<sni>&alpn=h3&insecure=1#hy2
 
 默认卸载命令：
 ```bash
-service hysteria stop && rc-update del hysteria && rm /etc/init.d/hysteria && rm /usr/local/bin/hysteria && rm -rf /etc/hysteria && rm hy2.sh && rm .wget-hsts
+service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh ; rm .wget-hsts
 ```
 
 ## 贡献指南
