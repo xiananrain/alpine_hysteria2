@@ -198,10 +198,7 @@ case $TLS_TYPE in
         ;;
 esac
 
-# 处理特殊字符编码（虽然UUID不需要，但保留逻辑）
-encoded_password=$(echo -n "$PASSWORD" | curl -Gso /dev/null -w %{url_effective} --data-urlencode @- "" | cut -c3-)
-
-SUBSCRIPTION_LINK="hysteria2://${encoded_password}@${LINK_ADDRESS}:${PORT}/?sni=${SNI_LINK}&alpn=h3&insecure=${INSECURE}#hy2"
+SUBSCRIPTION_LINK="hysteria2://${$PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${SNI_LINK}&alpn=h3&insecure=${INSECURE}#hy2"
 
 # 显示结果
 echo "------------------------------------------------------------------------"
