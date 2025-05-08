@@ -7,7 +7,7 @@
 使用下面的命令一键安装并启动 hysteria2：
 
 ```bash
-wget -O hy2.sh https://example.com/path/to/your/script/hy2.sh && sh hy2.sh
+wget -O hy2.sh https://raw.githubusercontent.com//1TIME1/alpine_hy2/main/hy2.sh && sh hy2.sh
 
 **注意**：重复执行脚本会覆盖之前的密码。
 
