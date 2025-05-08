@@ -68,13 +68,8 @@ hysteria2://<password>@<server_ip>:<port>/?sni=<sni>&alpn=h3&insecure=1#hy2
 
 默认卸载命令：
 ```bash
-service hysteria stop && rc-update del hysteria && rm /etc/init.d/hysteria && rm /usr/local/bin/hysteria && rm -rf /etc/hysteria && rm hy2.sh
+service hysteria stop && rc-update del hysteria && rm /etc/init.d/hysteria && rm /usr/local/bin/hysteria && rm -rf /etc/hysteria && rm hy2.sh && rm.wget-hsts
 ```
-指定卸载命令：
-```bash
-service hysteria stop && rc-update del hysteria && rm /etc/init.d/hysteria && rm /usr/local/bin/hysteria && rm -rf /etc/hysteria && rm /path/to/hy2.sh
-```
-请将 `/path/to/hy2.sh` 替换为脚本的实际路径。
 
 ## 贡献指南
 
