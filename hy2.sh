@@ -27,6 +27,15 @@ if [ -z "$SERVER_IP" ]; then
   exit 1
 fi
 
+# 判断 IP 版本并调整订阅链接格式
+if echo "$SERVER_IP" | grep -q ":"; then
+  # IPv6
+  SERVER_IP_FOR_LINK="[$SERVER_IP]"
+else
+  # IPv4
+  SERVER_IP_FOR_LINK="$SERVER_IP"
+fi
+
 # 生成 Hysteria config.yaml 的函数
 echo_hysteria_config_yaml() {
   cat << EOF
@@ -97,7 +106,10 @@ rc-update add hysteria
 service hysteria start
 
 # 生成 Hysteria 2 订阅链接
-SUBSCRIPTION_LINK="hysteria2://$PASSWORD@$SERVER_IP:$PORT/?sni=$SNI&alpn=h3&insecure=1#hy2"
+SUBSCRIPTION_LINK="hysteria2://$PASSWORD@$SERVER_IP_FOR_LINK:$PORT/?sni=$SNI&alpn=h3&insecure=1#hy2"
+
+# 获取脚本的绝对路径
+SCRIPT_PATH=$(realpath "$0")
 
 # 输出安装摘要和卸载说明
 echo "------------------------------------------------------------------------"
@@ -112,12 +124,8 @@ echo "一键复制粘贴到支持 Hysteria 2 的客户端的订阅链接："
 echo "$SUBSCRIPTION_LINK"
 echo "注意：如果您的 V2Ray 客户端不支持 Hysteria 2，请使用支持该协议的客户端。"
 echo "------------------------------------------------------------------------"
-echo "卸载 Hysteria 2 的命令："
-echo "service hysteria stop"
-echo "rc-update del hysteria"
-echo "rm /etc/init.d/hysteria"
-echo "rm /usr/local/bin/hysteria"
-echo "rm -rf /etc/hysteria"
+echo "一键卸载 Hysteria 2 的命令："
+echo "service hysteria stop && rc-update del hysteria && rm /etc/init.d/hysteria && rm /usr/local/bin/hysteria && rm -rf /etc/hysteria && rm $SCRIPT_PATH"
 echo "------------------------------------------------------------------------"
 echo "请享用。"
 echo "------------------------------------------------------------------------"
