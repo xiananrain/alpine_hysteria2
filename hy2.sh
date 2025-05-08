@@ -12,11 +12,11 @@ echo "---------------------------------------"
 # --- 依赖包安装 ---
 echo -e "${YELLOW}正在安装必要的软件包...${NC}" >&2
 apk update >/dev/null
-REQUIRED_PKGS="wget curl git openssl openrc lsof coreutils"
+REQUIRED_PKGS="wget curl git openssl openrc lsof coreutils" 
 for pkg in $REQUIRED_PKGS; do
     if ! apk info -e $pkg &>/dev/null; then
         echo "正在安装 $pkg..." >&2
-        if ! apk add $pkg > /dev/null; then # 安静模式安装，成功时不输出
+        if ! apk add $pkg > /dev/null; then 
             echo -e "${RED}错误: 安装 $pkg 失败。请手动安装后重试。${NC}" >&2
             exit 1
         fi
@@ -40,21 +40,26 @@ generate_uuid() {
     echo "${bytes:0:8}-${bytes:8:4}-${byte7}-${byte9}-${bytes:24:12}" | tr '[:upper:]' '[:lower:]'
 }
 
+# 生成随机8位小写字母函数
+generate_random_lowercase_string() {
+    LC_ALL=C tr -dc 'a-z' < /dev/urandom | head -c 8
+}
+
 # 获取服务器公网地址并格式化，优先使用IPv6
 get_server_address() {
     local ipv6_ip
     local ipv4_ip
 
-    echo "正在检测服务器公网 IP 地址..." >&2
+    echo "正在检测服务器公网 IP 地址..." >&2 
     # 首先尝试获取IPv6地址
-    echo "尝试获取 IPv6 地址..." >&2
+    echo "尝试获取 IPv6 地址..." >&2 
     ipv6_ip=$(curl -s -m 5 -6 ifconfig.me || curl -s -m 5 -6 ip.sb || curl -s -m 5 -6 api64.ipify.org)
     if [ -n "$ipv6_ip" ] && [[ "$ipv6_ip" == *":"* ]]; then # 检查是否是有效的IPv6地址
-        echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}" >&2
-        echo "[$ipv6_ip]"
+        echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}" >&2 
+        echo "[$ipv6_ip]" # 这是实际返回给调用者的值，输出到标准输出流
         return
     else
-        echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}" >&2
+        echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}" >&2 
     fi
 
     # 如果未找到IPv6或获取失败，则尝试获取IPv4地址
@@ -75,14 +80,14 @@ get_server_address() {
 
 # --- 用户输入 ---
 DEFAULT_MASQUERADE_URL="https://www.bing.com" # 默认伪装网址
-DEFAULT_PORT="34567" # 默认端口
+DEFAULT_PORT="34567"
+DEFAULT_ACME_EMAIL="$(generate_random_lowercase_string)@gmail.com" # 默认ACME邮箱
 
 echo "" >&2
 echo -e "${YELLOW}请选择 TLS 验证方式:${NC}" >&2
 echo "1. 自定义证书 (适用于已有证书或 NAT VPS 生成自签名证书)" >&2
 echo "2. ACME HTTP 验证 (需要域名指向本机IP，且本机80端口可被 Hysteria 使用)" >&2
-echo "3. Cloudflare DNS 验证 (需要域名由 Cloudflare 解析，并提供 API Token)" >&2
-read -p "请选择 [1-3, 默认 1]: " TLS_TYPE
+read -p "请选择 [1-2, 默认 1]: " TLS_TYPE
 TLS_TYPE=${TLS_TYPE:-1} # 如果用户未输入，则使用默认值1
 
 # 初始化变量
@@ -90,9 +95,7 @@ CERT_PATH=""
 KEY_PATH=""
 DOMAIN=""
 SNI=""
-EMAIL=""
-CF_TOKEN=""
-ACME_EMAIL="user@example.com" # ACME申请证书的默认邮箱，稍后会提示用户输入
+ACME_EMAIL="" # ACME申请证书的邮箱
 
 case $TLS_TYPE in
     1) # 自定义证书模式
@@ -150,30 +153,21 @@ case $TLS_TYPE in
         echo -e "${YELLOW}--- ACME HTTP 验证模式 ---${NC}" >&2
         read -p "请输入您的域名 (例如: example.com): " DOMAIN
         if [ -z "$DOMAIN" ]; then echo -e "${RED}域名不能为空！${NC}" >&2; exit 1; fi
-        read -p "请输入用于 ACME 证书申请的邮箱 (例如: admin@$DOMAIN): " ACME_EMAIL
-        if [ -z "$ACME_EMAIL" ]; then echo -e "${RED}邮箱不能为空！${NC}" >&2; exit 1; fi
+        read -p "请输入用于 ACME 证书申请的邮箱 (默认 $DEFAULT_ACME_EMAIL): " INPUT_ACME_EMAIL
+        ACME_EMAIL=${INPUT_ACME_EMAIL:-$DEFAULT_ACME_EMAIL} # 如果用户未输入，则使用默认ACME邮箱
+        if [ -z "$ACME_EMAIL" ]; then echo -e "${RED}邮箱不能为空！${NC}" >&2; exit 1; fi # 再次检查，防止默认值生成失败
         SNI=$DOMAIN # ACME模式下，SNI与域名相同
 
         echo "检查 80 端口占用情况..." >&2
         if lsof -i:80 -sTCP:LISTEN -P -n &>/dev/null; then # 检查80端口是否被占用
             echo -e "${YELLOW}警告: 检测到 80 端口已被占用。Hysteria 将尝试使用此端口进行 ACME 验证。${NC}" >&2
-            echo "如果 Hysteria 启动失败，请确保没有其他服务 (如nginx, apache) 占用80端口，或者改用 DNS 验证。" >&2
+            echo "如果 Hysteria 启动失败，请确保没有其他服务 (如nginx, apache) 占用80端口。" >&2
             PID_80=$(lsof -t -i:80 -sTCP:LISTEN) # 获取占用80端口的进程ID
             [ -n "$PID_80" ] && echo "占用80端口的进程 PID(s): $PID_80" >&2
         else
             echo "80 端口未被占用，可用于 ACME HTTP 验证。" >&2
         fi
         # setcap权限将在Hysteria二进制文件下载后设置
-        ;;
-    3) # Cloudflare DNS 验证模式
-        echo -e "${YELLOW}--- Cloudflare DNS 验证模式 ---${NC}" >&2
-        read -p "请输入您的域名 (例如: example.com): " DOMAIN
-        if [ -z "$DOMAIN" ]; then echo -e "${RED}域名不能为空！${NC}" >&2; exit 1; fi
-        read -p "请输入用于 ACME 证书申请的邮箱 (例如: admin@$DOMAIN): " ACME_EMAIL
-        if [ -z "$ACME_EMAIL" ]; then echo -e "${RED}邮箱不能为空！${NC}" >&2; exit 1; fi
-        read -p "请输入您的 Cloudflare API Token (具有 Zone.DNS 编辑权限): " CF_TOKEN
-        if [ -z "$CF_TOKEN" ]; then echo -e "${RED}Cloudflare API Token 不能为空！${NC}" >&2; exit 1; fi
-        SNI=$DOMAIN # ACME模式下，SNI与域名相同
         ;;
     *) # 无效选项
         echo -e "${RED}无效选项，退出脚本。${NC}" >&2
@@ -266,18 +260,6 @@ acme:
 EOF
         LINK_SNI="$DOMAIN"; LINK_ADDRESS="$DOMAIN"; LINK_INSECURE=0 # ACME证书是受信任的
         ;;
-    3) # Cloudflare DNS
-        cat >> /etc/hysteria/config.yaml << EOF
-acme:
-  domains:
-    - $DOMAIN
-  email: $ACME_EMAIL
-  dns:
-    provider: cloudflare # DNS提供商
-    cloudflare_api_token: "$CF_TOKEN" # Cloudflare API Token，需要加引号以防特殊字符
-EOF
-        LINK_SNI="$DOMAIN"; LINK_ADDRESS="$DOMAIN"; LINK_INSECURE=0 # ACME证书是受信任的
-        ;;
 esac
 echo -e "${GREEN}配置文件生成完毕。${NC}" >&2
 
@@ -324,7 +306,7 @@ echo -e "${GREEN}OpenRC 服务文件创建成功。${NC}" >&2
 
 # --- 启用并启动服务 ---
 echo -e "${YELLOW}正在启用并启动 Hysteria 服务...${NC}" >&2
-rc-update add hysteria default >/dev/null # 将服务添加到默认运行级别，并禁止输出
+rc-update add hysteria default >/dev/null # 将服务添加到默认运行级别
 service hysteria stop >/dev/null 2>&1 # 尝试停止任何可能已在运行的实例
 if ! service hysteria start; then # 启动服务并检查是否成功
     echo -e "${RED}Hysteria 服务启动失败。请检查以下日志获取错误信息:${NC}" >&2
@@ -336,7 +318,6 @@ fi
 echo -e "${GREEN}等待服务启动...${NC}" >&2; sleep 3 # 等待片刻让服务有时间启动和记录日志
 
 # --- 显示结果 ---
-# 最终的输出信息应该在标准输出流 (默认的echo行为)
 if service hysteria status | grep -q "started"; then # 检查服务状态
     echo -e "${GREEN}Hysteria 服务已成功启动！${NC}"
 else
@@ -348,7 +329,7 @@ fi
 
 SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}#Hysteria-${SNI}" # 生成订阅链接
 
-echo "" # 输出空行
+echo "" # 输出空行，用于格式化
 echo "------------------------------------------------------------------------"
 echo -e "${GREEN}Hysteria 2 安装和配置完成！${NC}"
 echo "------------------------------------------------------------------------"
@@ -357,12 +338,16 @@ echo "端口: $PORT"
 echo "密码: $PASSWORD"
 echo "SNI / 伪装域名: $LINK_SNI"
 echo "伪装目标站点: $MASQUERADE_URL"
-echo "TLS 模式: $TLS_TYPE (1:Custom, 2:ACME-HTTP, 3:Cloudflare-DNS)"
-[ "$TLS_TYPE" -eq 1 ] && echo "证书路径: $CERT_PATH; 私钥路径: $KEY_PATH" # 如果是自定义证书模式，显示证书路径
+echo "TLS 模式: $TLS_TYPE (1:Custom, 2:ACME-HTTP)"
+if [ "$TLS_TYPE" -eq 1 ]; then
+    echo "证书路径: $CERT_PATH; 私钥路径: $KEY_PATH" # 如果是自定义证书模式，显示证书路径
+elif [ "$TLS_TYPE" -eq 2 ]; then
+    echo "ACME 邮箱: $ACME_EMAIL" # 如果是ACME模式，显示使用的邮箱
+fi
 echo "客户端 insecure (0=false, 1=true): $LINK_INSECURE"
 echo "------------------------------------------------------------------------"
 echo -e "${YELLOW}订阅链接 (Hysteria V2):${NC}"
-echo "$SUBSCRIPTION_LINK"
+echo "$SUBSCRIPTION_LINK" # 输出订阅链接
 echo "------------------------------------------------------------------------"
 
 # 可选：显示二维码
