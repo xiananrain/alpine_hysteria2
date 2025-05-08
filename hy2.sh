@@ -153,7 +153,7 @@ case $TLS_TYPE in
         echo -e "${YELLOW}--- ACME HTTP 验证模式 ---${NC}" >&2
         read -p "请输入您的域名 (例如: example.com): " DOMAIN
         if [ -z "$DOMAIN" ]; then echo -e "${RED}域名不能为空！${NC}" >&2; exit 1; fi
-        read -p "请输入用于 ACME 证书申请的邮箱 (默认 $DEFAULT_ACME_EMAIL): " INPUT_ACME_EMAIL
+        read -p "请输入用于 ACME 证书申请的邮箱 (回车默认 $DEFAULT_ACME_EMAIL): " INPUT_ACME_EMAIL
         ACME_EMAIL=${INPUT_ACME_EMAIL:-$DEFAULT_ACME_EMAIL} # 如果用户未输入，则使用默认ACME邮箱
         if [ -z "$ACME_EMAIL" ]; then echo -e "${RED}邮箱不能为空！${NC}" >&2; exit 1; fi # 再次检查，防止默认值生成失败
         SNI=$DOMAIN # ACME模式下，SNI与域名相同
