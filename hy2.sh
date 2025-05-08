@@ -1,15 +1,21 @@
 #!/bin/bash
 
-# 安装必要的软件包，包括 libuuid 以支持 uuidgen
-apk add wget curl git openssh openssl openrc libuuid
+# 安装必要的软件包
+apk add wget curl git openssh openssl openrc
+
+# 生成随机密码的函数
+generate_random_password() {
+  dd if=/dev/random bs=18 count=1 status=none | base64
+}
 
 # 提供默认值
 read -p "请输入端口（默认 34567）: " PORT
 PORT=${PORT:-34567}
 
-# 生成随机 UUID 作为密码
-PASSWORD=$(uuidgen)
-echo "生成的 UUID: $PASSWORD"
+read -p "请输入密码（回车则使用随机密码）: " PASSWORD
+if [ -z "$PASSWORD" ]; then
+  PASSWORD="$(generate_random_password)"
+fi
 
 read -p "请输入伪装域名（默认 www.bing.com）: " SNI
 SNI=${SNI:-www.bing.com}
