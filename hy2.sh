@@ -12,7 +12,18 @@ echo "---------------------------------------"
 # --- Prerequisite Installation ---
 echo -e "${YELLOW}Installing necessary packages...${NC}"
 apk update >/dev/null
-apk add openssl
+REQUIRED_PKGS="wget curl git openssh openssl openrc lsof coreutils" # coreutils for 'realpath'
+for pkg in $REQUIRED_PKGS; do
+    if ! apk info -e $pkg &>/dev/null; then
+        echo "Installing $pkg..."
+        if ! apk add $pkg; then
+            echo -e "${RED}Error: Failed to install $pkg. Please install it manually and retry.${NC}"
+            exit 1
+        fi
+    else
+        echo "$pkg is already installed."
+    fi
+done
 echo -e "${GREEN}Dependencies installed successfully.${NC}"
 
 # --- Helper Functions ---
@@ -29,26 +40,38 @@ generate_uuid() {
     echo "${bytes:0:8}-${bytes:8:4}-${byte7}-${byte9}-${bytes:24:12}" | tr '[:upper:]' '[:lower:]'
 }
 
-# 获取服务器地址并格式化
+# 获取服务器地址并格式化, 优先 IPv6
 get_server_address() {
-    local ip
-    # Try IPv4 first
-    ip=$(curl -s -4 ifconfig.me)
-    if [ -z "$ip" ]; then
-        # Try IPv6 if IPv4 fails
-        ip=$(curl -s -6 ifconfig.me)
-        if [ -z "$ip" ]; then
-            echo -e "${RED}无法获取服务器 IP 地址，请检查网络连接。${NC}"
-            exit 1
-        fi
+    local ipv6_ip
+    local ipv4_ip
+
+    echo "正在检测服务器公网 IP 地址..."
+    # Try IPv6 first
+    echo "尝试获取 IPv6 地址..."
+    ipv6_ip=$(curl -s -m 5 -6 ifconfig.me || curl -s -m 5 -6 ip.sb || curl -s -m 5 -6 api64.ipify.org)
+    if [ -n "$ipv6_ip" ] && [[ "$ipv6_ip" == *":"* ]]; then
+        echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}"
+        echo "[$ipv6_ip]"
+        return
+    else
+        echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}"
     fi
 
-    if [[ "$ip" == *":"* ]]; then # IPv6
-        echo "[$ip]"
-    else # IPv4
-        echo "$ip"
+    # Try IPv4 if IPv6 not found or failed
+    echo "尝试获取 IPv4 地址..."
+    ipv4_ip=$(curl -s -m 5 -4 ifconfig.me || curl -s -m 5 -4 ip.sb || curl -s -m 5 -4 api.ipify.org)
+    if [ -n "$ipv4_ip" ] && [[ "$ipv4_ip" != *":"* ]]; then
+        echo -e "${GREEN}检测到 IPv4 地址: $ipv4_ip${NC}"
+        echo "$ipv4_ip"
+        return
+    else
+        echo -e "${YELLOW}未检测到 IPv4 地址或获取失败。${NC}"
     fi
+
+    echo -e "${RED}错误: 无法获取服务器公网 IP 地址 (IPv4 或 IPv6)。请检查网络连接。${NC}"
+    exit 1
 }
+
 
 # --- User Inputs ---
 DEFAULT_MASQUERADE_URL="https://www.bing.com"
@@ -140,18 +163,11 @@ case $TLS_TYPE in
             PID_80=$(lsof -t -i:80 -sTCP:LISTEN)
             if [ -n "$PID_80" ]; then
                  echo "占用80端口的进程 PID(s): $PID_80"
-                 # Optionally offer to kill, but better to inform first
-                 # read -p "是否尝试停止占用80端口的进程? (y/N): " KILL_CHOICE
-                 # if [[ "$KILL_CHOICE" == "y" || "$KILL_CHOICE" == "Y" ]]; then
-                 #    kill -9 $PID_80 && echo "进程已尝试停止。" || echo "停止进程失败。"
-                 # fi
             fi
         else
             echo "80 端口未被占用，可用于 ACME HTTP 验证。"
         fi
-        echo "为 Hysteria 二进制文件设置 cap_net_bind_service 权限以允许绑定到80端口..."
-        # Download Hysteria first to setcap, or setcap later after download
-        # We'll do it after download for simplicity here.
+        # setcap will be applied after Hysteria download
         ;;
     3)
         echo -e "${YELLOW}--- Cloudflare DNS 验证模式 ---${NC}"
@@ -190,13 +206,14 @@ fi
 read -p "请输入伪装访问的目标URL (默认 $DEFAULT_MASQUERADE_URL): " MASQUERADE_URL
 MASQUERADE_URL=${MASQUERADE_URL:-$DEFAULT_MASQUERADE_URL}
 
+# Get server public address (prioritizes IPv6)
 SERVER_PUBLIC_ADDRESS=$(get_server_address)
+
 mkdir -p /etc/hysteria
 
 # --- Hysteria Binary Download and Permissions ---
 HYSTERIA_BIN="/usr/local/bin/hysteria"
 echo -e "${YELLOW}正在下载 Hysteria 最新版...${NC}"
-# Determine architecture
 ARCH=$(uname -m)
 case ${ARCH} in
     x86_64)
@@ -205,7 +222,9 @@ case ${ARCH} in
     aarch64)
         HYSTERIA_ARCH="arm64"
         ;;
-    # Add other architectures if needed, e.g. armv7
+    armv7l) # For armv7
+        HYSTERIA_ARCH="arm"
+        ;;
     *)
         echo -e "${RED}不支持的系统架构: ${ARCH}${NC}"
         exit 1
@@ -221,18 +240,13 @@ echo -e "${GREEN}Hysteria 下载并设置权限完成: $HYSTERIA_BIN${NC}"
 
 if [ "$TLS_TYPE" -eq 2 ]; then
     echo "为 Hysteria 二进制文件设置 cap_net_bind_service 权限..."
+    if ! command -v setcap &>/dev/null; then
+        echo -e "${YELLOW}setcap 命令未找到，尝试安装 libcap...${NC}"
+        apk add libcap --no-cache
+    fi
+
     if ! setcap 'cap_net_bind_service=+ep' "$HYSTERIA_BIN"; then
-        echo -e "${RED}错误: setcap 失败。ACME HTTP 验证可能无法工作。请确保已安装 libcap (apk add libcap).${NC}"
-        # apk add libcap if not present, then retry
-        if ! apk info -e libcap &>/dev/null; then
-            echo "尝试安装 libcap..."
-            apk add libcap
-            if ! setcap 'cap_net_bind_service=+ep' "$HYSTERIA_BIN"; then
-                 echo -e "${RED}再次 setcap 失败。请手动执行 setcap 'cap_net_bind_service=+ep' $HYSTERIA_BIN ${NC}"
-            else
-                 echo -e "${GREEN}setcap 成功。${NC}"
-            fi
-        fi
+        echo -e "${RED}错误: setcap 失败。ACME HTTP 验证可能无法工作。请确保已安装 libcap 并具有相应权限。${NC}"
     else
         echo -e "${GREEN}setcap 成功。${NC}"
     fi
@@ -252,10 +266,9 @@ masquerade:
   type: proxy
   proxy:
     url: $MASQUERADE_URL
-    rewriteHost: true # Important for SNI consistency with masquerade target
+    rewriteHost: true
 EOF
 
-# TLS/ACME specific configuration
 case $TLS_TYPE in
     1)
         cat >> /etc/hysteria/config.yaml << EOF
@@ -263,18 +276,10 @@ tls:
   cert: $CERT_PATH
   key: $KEY_PATH
 EOF
-        # If self-signed, SNI might be different from actual domain, use specified SNI
         LINK_SNI="$SNI"
-        LINK_ADDRESS="$SERVER_PUBLIC_ADDRESS" # For self-signed, typically use IP
-        LINK_INSECURE=1 # Self-signed certs are insecure by default for clients
-        # For user-provided valid cert, user might want to use domain and secure=0
-        # We'll assume if custom cert is provided, it might be for an IP or internal domain.
-        # If they have a valid cert for a public domain, they'd likely use ACME.
-        # To be safe, if it's not a known ACME domain, mark insecure=1 or let user choose.
-        # For simplicity here: self-signed is insecure=1. User-provided custom, assume insecure=1 unless SNI is a public domain.
-        # This part can be made more nuanced. For now, custom cert -> insecure=1 is safer.
-        echo -e "${YELLOW}注意: 使用自定义证书时，客户端可能需要设置 'insecure: true' (对应链接中 insecure=1)${NC}"
-
+        LINK_ADDRESS="$SERVER_PUBLIC_ADDRESS" 
+        LINK_INSECURE=1 
+        echo -e "${YELLOW}注意: 使用自定义证书时，客户端通常需要设置 'insecure: true' (对应链接中 insecure=1)${NC}"
         ;;
     2)
         cat >> /etc/hysteria/config.yaml << EOF
@@ -282,10 +287,9 @@ acme:
   domains:
     - $DOMAIN
   email: $ACME_EMAIL
-  # Hysteria will handle the HTTP-01 challenge on port 80
 EOF
         LINK_SNI="$DOMAIN"
-        LINK_ADDRESS="$DOMAIN" # For ACME, always use the domain
+        LINK_ADDRESS="$DOMAIN" 
         LINK_INSECURE=0
         ;;
     3)
@@ -296,10 +300,10 @@ acme:
   email: $ACME_EMAIL
   dns:
     provider: cloudflare
-    cloudflare_api_token: "$CF_TOKEN" # Important to quote if token has special chars
+    cloudflare_api_token: "$CF_TOKEN"
 EOF
         LINK_SNI="$DOMAIN"
-        LINK_ADDRESS="$DOMAIN" # For ACME, always use the domain
+        LINK_ADDRESS="$DOMAIN" 
         LINK_INSECURE=0
         ;;
 esac
@@ -316,7 +320,7 @@ command_args="server --config /etc/hysteria/config.yaml"
 pidfile="/var/run/\${name}.pid"
 command_background="yes"
 output_log="/var/log/hysteria.log"
-error_log="/var/log/hysteria.error.log" # Separate error log
+error_log="/var/log/hysteria.error.log"
 
 depend() {
   need net
@@ -324,10 +328,8 @@ depend() {
 }
 
 start_pre() {
-  checkpath -f \$output_log -m 0644 -o hysteria:hysteria
-  checkpath -f \$error_log -m 0644 -o hysteria:hysteria
-  # Ensure /var/run exists and is writable, OpenRC usually handles this
-  # checkpath -d /var/run
+  checkpath -f \$output_log -m 0644
+  checkpath -f \$error_log -m 0644
 }
 
 start() {
@@ -344,47 +346,43 @@ stop() {
     start-stop-daemon --stop --quiet --pidfile \$pidfile
     eend \$?
 }
-
-# restart is handled by openrc calling stop then start
 EOF
 
 chmod +x /etc/init.d/hysteria
-# Create a hysteria user/group for logging, if desired, or chown to root.
-# For simplicity, logs will be owned by root unless hysteria user is created and specified in checkpath.
-# To keep it simple for now, removing -o hysteria:hysteria. Root will own logs.
-sed -i 's/ -o hysteria:hysteria//g' /etc/init.d/hysteria
-
 echo -e "${GREEN}OpenRC 服务文件创建成功。${NC}"
 
 # --- Enable and Start Service ---
 echo -e "${YELLOW}正在启用并启动 Hysteria 服务...${NC}"
-rc-update add hysteria default
-service hysteria stop >/dev/null 2>&1 # Stop if already running from a previous attempt
-service hysteria start
+rc-update add hysteria default >/dev/null
+service hysteria stop >/dev/null 2>&1 
+if ! service hysteria start; then
+    echo -e "${RED}Hysteria 服务启动失败。请检查以下日志获取错误信息:${NC}"
+    echo "  输出日志: tail -n 20 /var/log/hysteria.log"
+    echo "  错误日志: tail -n 20 /var/log/hysteria.error.log"
+    echo "  配置文件: cat /etc/hysteria/config.yaml"
+    echo "请根据错误信息调整配置或环境后，使用 'service hysteria restart' 重启服务。"
+    exit 1
+fi
 
-# Wait a few seconds for the service to potentially log errors
-sleep 5
+echo -e "${GREEN}等待服务启动...${NC}"
+sleep 5 # Give Hysteria a moment to start and possibly log initial messages
 
 # --- Display Results ---
 if service hysteria status | grep -q "started"; then
     echo -e "${GREEN}Hysteria 服务已成功启动！${NC}"
 else
-    echo -e "${RED}Hysteria 服务启动失败。请检查日志:${NC}"
-    echo "  日志: tail -n 20 /var/log/hysteria.log"
-    echo "  错误: tail -n 20 /var/log/hysteria.error.log"
-    echo "  配置: cat /etc/hysteria/config.yaml"
-    echo "请根据错误信息调整配置或环境后，使用 'service hysteria restart' 重启服务。"
-    # Optionally, exit here if start failed.
+    echo -e "${RED}Hysteria 服务状态异常。请检查日志:${NC}"
+    echo "  输出日志: tail -n 20 /var/log/hysteria.log"
+    echo "  错误日志: tail -n 20 /var/log/hysteria.error.log"
+    echo "  配置文件: cat /etc/hysteria/config.yaml"
 fi
 
-# Generate subscription link
-# Ensure LINK_ADDRESS doesn't have brackets for the hysteria2 URL scheme if it's an IPv6
 URL_HOST_PART="$LINK_ADDRESS"
-if [[ "$URL_HOST_PART" == "["* ]]; then # If it's like [ipv6_addr]
+if [[ "$URL_HOST_PART" == "["* ]]; then 
     URL_HOST_PART=$(echo "$URL_HOST_PART" | tr -d '[]')
 fi
 
-SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${URL_HOST_PART}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}#Hysteria-${SNI}" # Added a more descriptive fragment
+SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${URL_HOST_PART}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}#Hysteria-${SNI}"
 
 echo ""
 echo "------------------------------------------------------------------------"
@@ -406,7 +404,6 @@ echo -e "${YELLOW}订阅链接 (Hysteria V2):${NC}"
 echo "$SUBSCRIPTION_LINK"
 echo "------------------------------------------------------------------------"
 
-# Optional: QR Code
 if command -v qrencode &> /dev/null; then
     echo -e "${YELLOW}订阅链接二维码:${NC}"
     qrencode -t ANSIUTF8 "$SUBSCRIPTION_LINK"
