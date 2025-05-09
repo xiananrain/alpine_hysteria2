@@ -313,7 +313,7 @@ $SUBSCRIPTION_LINK
 
 EOF
 
-# --- 进程监控与自动重启 ---
+# --- 进程保活与自动重启 ---
 echo -e "${YELLOW}启动进程监控：若检测到 hysteria 进程崩溃，将自动重启服务${NC}" >&2
 while true; do
     if ! pgrep -x hysteria >/dev/null; then
