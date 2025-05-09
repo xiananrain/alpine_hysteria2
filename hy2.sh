@@ -313,14 +313,20 @@ $SUBSCRIPTION_LINK
 
 EOF
 
-# --- 进程保活与自动重启 ---
-echo -e "${YELLOW}启动进程监控：若检测到 hysteria 进程崩溃，将自动重启服务${NC}" >&2
+# --- 进程保活与自动重启（后台运行）---
+echo -e "${YELLOW}正在后台启动进程监控...${NC}" >&2
+(
+echo -e "${YELLOW}[保活守护] 进程监控已启动${NC}" >&2
 while true; do
     if ! pgrep -x hysteria >/dev/null; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S'): 检测到 hysteria 进程已退出，正在重启..." >&2
-        service hysteria start >/dev/null 2>&1
-        echo "$(date '+%Y-%m-%d %H:%M:%S'): 重启命令已发出。" >&2
+        echo "$(date '+%Y-%m-%d %H:%M:%S') 检测到进程退出，正在重启..." >> /var/log/hysteria_restart.log
+        service hysteria restart >/dev/null 2>&1
+        echo "$(date '+%Y-%m-%d %H:%M:%S') 服务已重启" >> /var/log/hysteria_restart.log
     fi
-    sleep 15
+    sleep 10
 done
+) >/dev/null 2>&1 & 
 
+disown $!
+
+echo -e "${GREEN}保活守护进程已启动，日志保存在 /var/log/hysteria_restart.log${NC}"
