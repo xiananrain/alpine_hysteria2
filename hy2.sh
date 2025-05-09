@@ -28,7 +28,6 @@ echo -e "${GREEN}依赖包安装成功。${NC}" >&2
 
 # --- 辅助函数 ---
 
-# 生成符合RFC 4122标准的UUIDv4函数
 generate_uuid() {
     local bytes=$(od -x -N 16 /dev/urandom | head -1 | awk '{OFS=""; $1=""; print}')
     local byte7=${bytes:12:4}
@@ -40,18 +39,15 @@ generate_uuid() {
     echo "${bytes:0:8}-${bytes:8:4}-${byte7}-${byte9}-${bytes:24:12}" | tr '[:upper:]' '[:lower:]'
 }
 
-# 生成随机8位小写字母函数
 generate_random_lowercase_string() {
     LC_ALL=C tr -dc 'a-z' < /dev/urandom | head -c 8
 }
 
-# 获取服务器公网地址并格式化，优先使用IPv6
 get_server_address() {
     local ipv6_ip
     local ipv4_ip
 
     echo "正在检测服务器公网 IP 地址..." >&2
-    echo "尝试获取 IPv6 地址..." >&2
     ipv6_ip=$(curl -s -m 5 -6 ifconfig.me || curl -s -m 5 -6 ip.sb || curl -s -m 5 -6 api64.ipify.org)
     if [ -n "$ipv6_ip" ] && [[ "$ipv6_ip" == *":"* ]]; then
         echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}" >&2
@@ -61,7 +57,6 @@ get_server_address() {
         echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}" >&2
     fi
 
-    echo "尝试获取 IPv4 地址..." >&2
     ipv4_ip=$(curl -s -m 5 -4 ifconfig.me || curl -s -m 5 -4 ip.sb || curl -s -m 5 -4 api.ipify.org)
     if [ -n "$ipv4_ip" ] && [[ "$ipv4_ip" != *":"* ]]; then
         echo -e "${GREEN}检测到 IPv4 地址: $ipv4_ip${NC}" >&2
@@ -239,17 +234,22 @@ EOF
 esac
 echo -e "${GREEN}配置文件生成完毕。${NC}" >&2
 
-# --- 创建 OpenRC 服务 ---
-echo -e "${YELLOW}正在创建 OpenRC 服务文件 /etc/init.d/hysteria...${NC}" >&2
+# --- 创建 OpenRC 服务（关键改进点）---
+echo -e "${YELLOW}创建具备自动重启能力的OpenRC服务...${NC}" >&2
 cat > /etc/init.d/hysteria << EOF
 #!/sbin/openrc-run
 name="hysteria"
 command="$HYSTERIA_BIN"
 command_args="server --config /etc/hysteria/config.yaml"
 pidfile="/var/run/\${name}.pid"
-command_background="yes"
 output_log="/var/log/hysteria.log"
 error_log="/var/log/hysteria.error.log"
+
+# 自动重启配置
+supervisor="supervise"
+respawn_max=0         # 无限次重启
+respawn_delay=5       # 重启间隔(秒)
+respawn_period=30     # 监控周期(秒)
 
 depend() {
   need net
@@ -263,70 +263,67 @@ start_pre() {
 
 start() {
   ebegin "Starting \$name"
-  start-stop-daemon --start --quiet --background \
-    --make-pidfile --pidfile \$pidfile \
-    --stdout \$output_log --stderr \$error_log \
+  supervise-daemon --start \\
+    --pidfile \$pidfile \\
+    --stdout \$output_log --stderr \$error_log \\
     --exec \$command -- \$command_args
   eend \$?
 }
 
 stop() {
   ebegin "Stopping \$name"
-  start-stop-daemon --stop --quiet --pidfile \$pidfile
+  supervise-daemon --stop --pidfile \$pidfile
   eend \$?
 }
 EOF
 chmod +x /etc/init.d/hysteria
-echo -e "${GREEN}OpenRC 服务文件创建成功。${NC}" >&2
+echo -e "${GREEN}OpenRC 服务配置成功。${NC}" >&2
 
-# --- 启用并启动服务 ---
-echo -e "${YELLOW}正在启用并启动 Hysteria 服务...${NC}" >&2
+# --- 服务管理 ---
+echo -e "${YELLOW}启用并启动服务...${NC}" >&2
 rc-update add hysteria default >/dev/null
 service hysteria stop >/dev/null 2>&1
+
 if ! service hysteria start; then
-    echo -e "${RED}Hysteria 服务启动失败。请检查日志。${NC}" >&2
+    echo -e "${RED}服务启动失败！错误日志：${NC}" >&2
+    tail -n 10 /var/log/hysteria.error.log >&2
     exit 1
 fi
-echo -e "${GREEN}Hysteria 服务已启动。${NC}" >&2
 
-# --- 显示基本信息 ---
+echo -e "${GREEN}服务已成功启动！${NC}" >&2
+
+# --- 显示配置信息 ---
 SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}#Hysteria-${SNI}"
 
 cat << EOF
 
 ------------------------------------------------------------------------
-${GREEN}Hysteria 2 安装和配置完成！${NC}
+${GREEN}Hysteria 2 安装完成！${NC}
 ------------------------------------------------------------------------
+服务状态：$(service hysteria status | awk '/status:/{print $2}')
+自动重启：已启用（崩溃后5秒自动恢复）
 服务器地址: $LINK_ADDRESS
 端口: $PORT
 密码: $PASSWORD
-SNI / 伪装域名: $LINK_SNI
-伪装目标站点: $MASQUERADE_URL
-TLS 模式: $TLS_TYPE
-$( [ $TLS_TYPE -eq 1 ] && echo "证书路径: $CERT_PATH; 私钥路径: $KEY_PATH" )
-$( [ $TLS_TYPE -eq 2 ] && echo "ACME 邮箱: $ACME_EMAIL" )
-客户端 insecure: $LINK_INSECURE
+SNI: $LINK_SNI
+伪装站点: $MASQUERADE_URL
 ------------------------------------------------------------------------
-订阅链接 (Hysteria V2):
+订阅链接：
 $SUBSCRIPTION_LINK
 ------------------------------------------------------------------------
-
+管理命令：
+启动服务：service hysteria start
+停止服务：service hysteria stop
+查看状态：service hysteria status
+实时日志：tail -f /var/log/hysteria.log
+错误日志：tail -f /var/log/hysteria.error.log
+------------------------------------------------------------------------
 EOF
 
-# --- 进程保活与自动重启（后台运行）---
-echo -e "${YELLOW}正在后台启动进程监控...${NC}" >&2
-(
-echo -e "${YELLOW}[保活守护] 进程监控已启动${NC}" >&2
-while true; do
-    if ! pgrep -x hysteria >/dev/null; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') 检测到进程退出，正在重启..." >> /var/log/hysteria_restart.log
-        service hysteria restart >/dev/null 2>&1
-        echo "$(date '+%Y-%m-%d %H:%M:%S') 服务已重启" >> /var/log/hysteria_restart.log
-    fi
-    sleep 10
-done
-) >/dev/null 2>&1 & 
-
-disown $!
-
-echo -e "${GREEN}保活守护进程已启动，日志保存在 /var/log/hysteria_restart.log${NC}"
+# 可选：生成二维码
+if command -v qrencode &>/dev/null; then
+    echo -e "${YELLOW}订阅链接二维码：${NC}"
+    qrencode -t ANSIUTF8 "$SUBSCRIPTION_LINK"
+else
+    echo -e "${YELLOW}提示: 安装 qrencode 可显示二维码 (apk add qrencode)${NC}"
+fi
