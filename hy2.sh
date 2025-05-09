@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # 输出颜色定义
@@ -6,17 +7,17 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # 无颜色
 
-echo -e "${YELLOW}Hysteria 2 Alpine Linux 安装脚本 (带崩溃重启功能)${NC}"
+echo -e "${YELLOW}Hysteria 2 Alpine Linux 安装脚本${NC}"
 echo "---------------------------------------"
 
 # --- 依赖包安装 ---
 echo -e "${YELLOW}正在安装必要的软件包...${NC}" >&2
 apk update >/dev/null
-REQUIRED_PKGS="wget curl git openssl openrc lsof coreutils"
+REQUIRED_PKGS="wget curl git openssl openrc lsof coreutils" 
 for pkg in $REQUIRED_PKGS; do
     if ! apk info -e $pkg &>/dev/null; then
         echo "正在安装 $pkg..." >&2
-        if ! apk add $pkg > /dev/null; then
+        if ! apk add $pkg > /dev/null; then 
             echo -e "${RED}错误: 安装 $pkg 失败。请手动安装后重试。${NC}" >&2
             exit 1
         fi
@@ -50,16 +51,16 @@ get_server_address() {
     local ipv6_ip
     local ipv4_ip
 
-    echo "正在检测服务器公网 IP 地址..." >&2
+    echo "正在检测服务器公网 IP 地址..." >&2 
     # 首先尝试获取IPv6地址
-    echo "尝试获取 IPv6 地址..." >&2
+    echo "尝试获取 IPv6 地址..." >&2 
     ipv6_ip=$(curl -s -m 5 -6 ifconfig.me || curl -s -m 5 -6 ip.sb || curl -s -m 5 -6 api64.ipify.org)
     if [ -n "$ipv6_ip" ] && [[ "$ipv6_ip" == *":"* ]]; then # 检查是否是有效的IPv6地址
-        echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}" >&2
-        echo "[$ipv6_ip]"
+        echo -e "${GREEN}检测到 IPv6 地址: $ipv6_ip (将优先使用)${NC}" >&2 
+        echo "[$ipv6_ip]" # 这是实际返回给调用者的值，输出到标准输出流
         return
     else
-        echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}" >&2
+        echo -e "${YELLOW}未检测到 IPv6 地址或获取失败。${NC}" >&2 
     fi
 
     # 如果未找到IPv6或获取失败，则尝试获取IPv4地址
@@ -82,7 +83,6 @@ get_server_address() {
 DEFAULT_MASQUERADE_URL="https://www.bing.com" # 默认伪装网址
 DEFAULT_PORT="34567"
 DEFAULT_ACME_EMAIL="$(generate_random_lowercase_string)@gmail.com" # 默认ACME邮箱
-RESTART_DELAY_SECONDS=5 # 崩溃后重启延迟时间（秒）
 
 echo "" >&2
 echo -e "${YELLOW}请选择 TLS 验证方式:${NC}" >&2
@@ -110,7 +110,7 @@ case $TLS_TYPE in
             read -p "请输入用于自签名证书的伪装域名 (默认 www.bing.com): " SELF_SIGN_SNI
             SELF_SIGN_SNI=${SELF_SIGN_SNI:-"www.bing.com"} # 默认自签名SNI
             SNI="$SELF_SIGN_SNI"
-
+            
             mkdir -p /etc/hysteria/certs # 创建证书存放目录
             CERT_PATH="/etc/hysteria/certs/server.crt" # 自签名证书路径
             KEY_PATH="/etc/hysteria/certs/server.key" # 自签名私钥路径
@@ -176,7 +176,7 @@ case $TLS_TYPE in
         ;;
 esac
 
-read -p "请输入 Hysteria 监听端口 (默认 $DEFAULT_PORT): " PORT
+read -p "请输入 Hysteria 端口 (默认 $DEFAULT_PORT): " PORT
 PORT=${PORT:-$DEFAULT_PORT} # 如果用户未输入，则使用默认端口
 
 read -p "请输入 Hysteria 密码 (回车则使用随机UUID): " PASSWORD
@@ -194,8 +194,6 @@ mkdir -p /etc/hysteria # 创建Hysteria配置目录
 
 # --- Hysteria 二进制文件下载与权限设置 ---
 HYSTERIA_BIN="/usr/local/bin/hysteria" # Hysteria二进制文件路径
-WATCHDOG_SCRIPT_PATH="/usr/local/bin/hysteria_watchdog.sh" # Watchdog脚本路径
-
 echo -e "${YELLOW}正在下载 Hysteria 最新版...${NC}" >&2
 ARCH=$(uname -m) # 获取系统架构
 case ${ARCH} in
@@ -227,9 +225,8 @@ if [ "$TLS_TYPE" -eq 2 ]; then
 fi
 
 # --- 生成 Hysteria 配置文件 config.yaml ---
-CONFIG_FILE_PATH="/etc/hysteria/config.yaml"
-echo -e "${YELLOW}正在生成配置文件 $CONFIG_FILE_PATH...${NC}" >&2
-cat > "$CONFIG_FILE_PATH" << EOF
+echo -e "${YELLOW}正在生成配置文件 /etc/hysteria/config.yaml...${NC}" >&2
+cat > /etc/hysteria/config.yaml << EOF
 listen: :$PORT # 监听地址和端口
 auth:
   type: password
@@ -244,7 +241,7 @@ EOF
 # 根据选择的TLS类型，追加相应的TLS/ACME配置
 case $TLS_TYPE in
     1) # 自定义证书
-        cat >> "$CONFIG_FILE_PATH" << EOF
+        cat >> /etc/hysteria/config.yaml << EOF
 tls:
   cert: $CERT_PATH # 证书路径
   key: $KEY_PATH   # 私钥路径
@@ -255,7 +252,7 @@ EOF
         echo -e "${YELLOW}注意: 使用自定义证书时，客户端通常需要设置 'insecure: true'${NC}" >&2
         ;;
     2) # ACME HTTP
-        cat >> "$CONFIG_FILE_PATH" << EOF
+        cat >> /etc/hysteria/config.yaml << EOF
 acme:
   domains:
     - $DOMAIN # 申请证书的域名
@@ -267,175 +264,73 @@ EOF
 esac
 echo -e "${GREEN}配置文件生成完毕。${NC}" >&2
 
-# --- 创建 Watchdog 脚本 ---
-WATCHDOG_LOG_FILE="/var/log/hysteria_watchdog.log"
-echo -e "${YELLOW}正在创建 Hysteria Watchdog 脚本 $WATCHDOG_SCRIPT_PATH...${NC}" >&2
-cat > "$WATCHDOG_SCRIPT_PATH" << EOF
-#!/bin/bash
-HYSTERIA_EXEC="$HYSTERIA_BIN"
-CONFIG="$CONFIG_FILE_PATH"
-RESTART_DELAY=${RESTART_DELAY_SECONDS}
-LOG_FILE="$WATCHDOG_LOG_FILE"
-HYSTERIA_PID_FILE="/var/run/hysteria_child.pid" # 用于存储实际Hysteria进程的PID
-
-log_msg() {
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') - \$1" >> "\$LOG_FILE"
-}
-
-# 信号处理函数，用于优雅地停止Hysteria子进程
-graceful_shutdown() {
-    log_msg "Watchdog received stop signal. Stopping Hysteria process..."
-    if [ -f "\$HYSTERIA_PID_FILE" ]; then
-        CHILD_PID=\$(cat "\$HYSTERIA_PID_FILE")
-        if kill -0 "\$CHILD_PID" 2>/dev/null; then
-            log_msg "Sending SIGTERM to Hysteria PID \$CHILD_PID."
-            kill -TERM "\$CHILD_PID"
-            # 等待一段时间让Hysteria进程自行退出
-            for _ in $(seq 1 5); do # 最多等待5秒
-                if ! kill -0 "\$CHILD_PID" 2>/dev/null; then
-                    log_msg "Hysteria process \$CHILD_PID terminated gracefully."
-                    rm -f "\$HYSTERIA_PID_FILE"
-                    break
-                fi
-                sleep 1
-            done
-            # 如果仍在运行，强制终止
-            if kill -0 "\$CHILD_PID" 2>/dev/null; then
-                log_msg "Hysteria process \$CHILD_PID did not terminate, sending SIGKILL."
-                kill -KILL "\$CHILD_PID"
-            fi
-        fi
-        rm -f "\$HYSTERIA_PID_FILE"
-    fi
-    log_msg "Watchdog exiting."
-    exit 0
-}
-
-# 捕获终止信号
-trap 'graceful_shutdown' SIGTERM SIGINT SIGQUIT
-
-log_msg "Watchdog started. Monitoring Hysteria."
-checkpath -f \$LOG_FILE -m 0644 # 确保日志文件存在且权限正确
-
-while true; do
-    log_msg "Starting Hysteria: \$HYSTERIA_EXEC server --config \$CONFIG"
-    # Hysteria的stdout和stderr将由OpenRC服务配置重定向
-    \$HYSTERIA_EXEC server --config "\$CONFIG" &
-    HY_PID=\$!
-    echo "\$HY_PID" > "\$HYSTERIA_PID_FILE"
-    log_msg "Hysteria started with PID \$HY_PID."
-
-    wait "\$HY_PID" # 等待Hysteria进程退出
-    EXIT_CODE=\$?
-    rm -f "\$HYSTERIA_PID_FILE" # Hysteria已退出，删除其PID文件
-
-    # 如果是由于trap信号导致的退出，graceful_shutdown会处理并退出watchdog
-    # 如果是Hysteria自行崩溃或退出，则记录并重启
-    log_msg "Hysteria process (PID \$HY_PID) exited with code \$EXIT_CODE."
-    log_msg "Restarting Hysteria in \$RESTART_DELAY seconds..."
-    sleep "\$RESTART_DELAY"
-done
-EOF
-chmod +x "$WATCHDOG_SCRIPT_PATH"
-echo -e "${GREEN}Hysteria Watchdog 脚本创建成功。${NC}" >&2
-
 # --- 创建 OpenRC 服务文件 ---
 echo -e "${YELLOW}正在创建 OpenRC 服务文件 /etc/init.d/hysteria...${NC}" >&2
 cat > /etc/init.d/hysteria << EOF
 #!/sbin/openrc-run
-name="hysteria"
-description="Hysteria (managed by watchdog)"
-# OpenRC 将管理 watchdog 脚本的 PID
-pidfile="/var/run/\${name}.pid"
-# Watchdog 脚本的路径
-command="$WATCHDOG_SCRIPT_PATH"
-# Watchdog 脚本不需要额外参数，它内部已经配置好了
-command_args=""
-command_background="yes" # Watchdog 脚本本身在后台运行
+name="hysteria" # 服务名称
+command="/usr/local/bin/hysteria" # Hysteria可执行文件路径
+command_args="server --config /etc/hysteria/config.yaml" # Hysteria启动参数
+pidfile="/var/run/\${name}.pid" # PID文件路径
+command_background="yes" # 后台运行
+output_log="/var/log/hysteria.log" # 标准输出日志
+error_log="/var/log/hysteria.error.log" # 错误输出日志
 
-# Hysteria进程自身的输出和错误会被Watchdog捕获，
-# 然后Watchdog的输出和错误会重定向到这里
-output_log="/var/log/hysteria.log"
-error_log="/var/log/hysteria.error.log"
-
-depend() {
-  need net
-  after firewall
+depend() { # 依赖项
+  need net      # 需要网络服务
+  after firewall # 在防火墙服务之后启动
 }
 
-start_pre() {
-  checkpath -f \$output_log -m 0644
-  checkpath -f \$error_log -m 0644
-  checkpath -f $WATCHDOG_LOG_FILE -m 0644 # Watchdog自己的日志
+start_pre() { # 启动前执行的命令
+  checkpath -f \$output_log -m 0644 # 检查并创建日志文件，设置权限
+  checkpath -f \$error_log -m 0644 # 检查并创建错误日志文件，设置权限
 }
 
-# start-stop-daemon将启动 $command (即watchdog脚本)
-# watchdog脚本内部会启动实际的hysteria进程并监控它
-# 当hysteria崩溃时，watchdog会重启它
-# 当service hysteria stop时，start-stop-daemon会向watchdog脚本发送信号
-# watchdog脚本的trap会捕获信号，然后尝试优雅停止hysteria子进程，然后watchdog自身退出
-
-# 注意: start() 和 stop() 函数保持不变，因为它们现在管理的是 watchdog 进程
-start() {
-  ebegin "Starting \$name (via watchdog)"
+start() { # 启动服务函数
+  ebegin "Starting \$name" # 开始启动服务的提示
   start-stop-daemon --start --quiet --background \\
     --make-pidfile --pidfile \$pidfile \\
     --stdout \$output_log --stderr \$error_log \\
-    --exec \$command -- \$command_args
-  eend \$?
+    --exec \$command -- \$command_args # 启动进程
+  eend \$? # 结束启动服务的提示，并显示结果
 }
 
-stop() {
-    ebegin "Stopping \$name (and its watchdog)"
-    # 这会向 watchdog 进程发送 SIGTERM
-    start-stop-daemon --stop --quiet --pidfile \$pidfile
-    # Watchdog 脚本的 trap 会处理子进程的停止
-    # 等待 watchdog 自身退出及其管理的 Hysteria 进程
-    sleep 2 # 给 watchdog 一点时间处理
-    if [ -f /var/run/hysteria_child.pid ]; then # 检查 Hysteria 子进程的 PID 文件
-        CHILD_PID_TO_CLEAN=\$(cat /var/run/hysteria_child.pid)
-        if kill -0 "\$CHILD_PID_TO_CLEAN" 2>/dev/null; then
-            ewarn "Hysteria child process \$CHILD_PID_TO_CLEAN might still be running. Attempting to stop it."
-            kill -TERM "\$CHILD_PID_TO_CLEAN"
-            sleep 1
-            kill -KILL "\$CHILD_PID_TO_CLEAN" 2>/dev/null
-        fi
-        rm -f /var/run/hysteria_child.pid
-    fi
-    eend \$?
+stop() { # 停止服务函数
+    ebegin "Stopping \$name" # 开始停止服务的提示
+    start-stop-daemon --stop --quiet --pidfile \$pidfile # 停止进程
+    eend \$? # 结束停止服务的提示，并显示结果
 }
+# restart 命令由OpenRC通过调用stop然后start来处理
 EOF
-chmod +x /etc/init.d/hysteria
+chmod +x /etc/init.d/hysteria # 赋予服务文件执行权限
 echo -e "${GREEN}OpenRC 服务文件创建成功。${NC}" >&2
 
 # --- 启用并启动服务 ---
 echo -e "${YELLOW}正在启用并启动 Hysteria 服务...${NC}" >&2
-rc-update add hysteria default >/dev/null
-service hysteria stop >/dev/null 2>&1
-if ! service hysteria start; then
+rc-update add hysteria default >/dev/null # 将服务添加到默认运行级别
+service hysteria stop >/dev/null 2>&1 # 尝试停止任何可能已在运行的实例
+if ! service hysteria start; then # 启动服务并检查是否成功
     echo -e "${RED}Hysteria 服务启动失败。请检查以下日志获取错误信息:${NC}" >&2
-    echo "  Hysteria 输出日志: tail -n 20 /var/log/hysteria.log" >&2
-    echo "  Hysteria 错误日志: tail -n 20 /var/log/hysteria.error.log" >&2
-    echo "  Watchdog 日志: tail -n 20 $WATCHDOG_LOG_FILE" >&2
-    echo "  配置文件: cat $CONFIG_FILE_PATH" >&2
+    echo "  输出日志: tail -n 20 /var/log/hysteria.log" >&2
+    echo "  错误日志: tail -n 20 /var/log/hysteria.error.log" >&2
+    echo "  配置文件: cat /etc/hysteria/config.yaml" >&2
     exit 1
 fi
-echo -e "${GREEN}等待服务启动...${NC}" >&2; sleep 3
+echo -e "${GREEN}等待服务启动...${NC}" >&2; sleep 3 # 等待片刻让服务有时间启动和记录日志
 
 # --- 显示结果 ---
-if service hysteria status | grep -q "started"; then
-    echo -e "${GREEN}Hysteria 服务已成功启动 (由Watchdog管理)！${NC}"
+if service hysteria status | grep -q "started"; then # 检查服务状态
+    echo -e "${GREEN}Hysteria 服务已成功启动！${NC}"
 else
     echo -e "${RED}Hysteria 服务状态异常。请检查日志:${NC}"
-    echo "  Hysteria 输出日志: tail -n 20 /var/log/hysteria.log"
-    echo "  Hysteria 错误日志: tail -n 20 /var/log/hysteria.error.log"
-    echo "  Watchdog 日志: tail -n 20 $WATCHDOG_LOG_FILE"
-    echo "  配置文件: cat $CONFIG_FILE_PATH"
+    echo "  输出日志: tail -n 20 /var/log/hysteria.log"
+    echo "  错误日志: tail -n 20 /var/log/hysteria.error.log"
+    echo "  配置文件: cat /etc/hysteria/config.yaml"
 fi
 
-SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}#Hysteria-${SNI}"
+SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}#Hysteria-${SNI}" # 生成订阅链接
 
-echo ""
+echo "" # 输出空行，用于格式化
 echo "------------------------------------------------------------------------"
 echo -e "${GREEN}Hysteria 2 安装和配置完成！${NC}"
 echo "------------------------------------------------------------------------"
@@ -446,33 +341,32 @@ echo "SNI / 伪装域名: $LINK_SNI"
 echo "伪装目标站点: $MASQUERADE_URL"
 echo "TLS 模式: $TLS_TYPE (1:Custom, 2:ACME-HTTP)"
 if [ "$TLS_TYPE" -eq 1 ]; then
-    echo "证书路径: $CERT_PATH; 私钥路径: $KEY_PATH"
+    echo "证书路径: $CERT_PATH; 私钥路径: $KEY_PATH" # 如果是自定义证书模式，显示证书路径
 elif [ "$TLS_TYPE" -eq 2 ]; then
-    echo "ACME 邮箱: $ACME_EMAIL"
+    echo "ACME 邮箱: $ACME_EMAIL" # 如果是ACME模式，显示使用的邮箱
 fi
 echo "客户端 insecure (0=false, 1=true): $LINK_INSECURE"
-echo "崩溃后重启延迟: ${RESTART_DELAY_SECONDS} 秒"
 echo "------------------------------------------------------------------------"
 echo -e "${YELLOW}订阅链接 (Hysteria V2):${NC}"
-echo "$SUBSCRIPTION_LINK"
+echo "$SUBSCRIPTION_LINK" # 输出订阅链接
 echo "------------------------------------------------------------------------"
 
-if command -v qrencode &> /dev/null; then
+# 可选：显示二维码
+if command -v qrencode &> /dev/null; then # 检查qrencode命令是否存在
     echo -e "${YELLOW}订阅链接二维码:${NC}"
-    qrencode -t ANSIUTF8 "$SUBSCRIPTION_LINK"
+    qrencode -t ANSIUTF8 "$SUBSCRIPTION_LINK" # 生成并显示二维码
 else
     echo -e "${YELLOW}提示: 安装 'qrencode' (apk add qrencode) 后可显示二维码。${NC}"
 fi
 echo "------------------------------------------------------------------------"
 echo "管理命令："
-echo "  service hysteria start   - 启动服务 (及Watchdog)"
-echo "  service hysteria stop    - 停止服务 (及Watchdog)"
-echo "  service hysteria restart - 重启服务 (及Watchdog)"
-echo "  service hysteria status  - 查看服务状态 (Watchdog状态)"
-echo "  cat $CONFIG_FILE_PATH - 查看Hysteria配置文件"
-echo "  tail -f /var/log/hysteria.log - 查看Hysteria实时日志"
-echo "  tail -f /var/log/hysteria.error.log - 查看Hysteria实时错误日志"
-echo "  tail -f $WATCHDOG_LOG_FILE - 查看Watchdog实时日志"
+echo "  service hysteria start   - 启动服务"
+echo "  service hysteria stop    - 停止服务"
+echo "  service hysteria restart - 重启服务"
+echo "  service hysteria status  - 查看状态"
+echo "  cat /etc/hysteria/config.yaml - 查看配置文件"
+echo "  tail -f /var/log/hysteria.log - 查看实时日志"
+echo "  tail -f /var/log/hysteria.error.log - 查看实时错误日志"
 echo "一键卸载命令："
-echo "  service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm -rf /etc/hysteria ; rm -f /var/run/hysteria.pid /var/run/hysteria_child.pid /var/log/hysteria* ; rm hy2.sh ; rm hysteria_watchdog.sh" 
+echo "  service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh"
 echo "------------------------------------------------------------------------"
