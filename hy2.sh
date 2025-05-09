@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # 输出颜色定义
@@ -77,7 +76,6 @@ get_server_address() {
     echo -e "${RED}错误: 无法获取服务器公网 IP 地址 (IPv4 或 IPv6)。请检查网络连接。${NC}" >&2
     exit 1
 }
-
 
 # --- 用户输入 ---
 DEFAULT_MASQUERADE_URL="https://www.bing.com" # 默认伪装网址
@@ -227,7 +225,7 @@ fi
 # --- 生成 Hysteria 配置文件 config.yaml ---
 echo -e "${YELLOW}正在生成配置文件 /etc/hysteria/config.yaml...${NC}" >&2
 cat > /etc/hysteria/config.yaml << EOF
-listen: :$PORT # 监听地址和端口
+listen: :$PORT # 地址和端口
 auth:
   type: password
   password: $PASSWORD # 认证方式及密码
@@ -368,5 +366,59 @@ echo "  cat /etc/hysteria/config.yaml - 查看配置文件"
 echo "  tail -f /var/log/hysteria.log - 查看实时日志"
 echo "  tail -f /var/log/hysteria.error.log - 查看实时错误日志"
 echo "一键卸载命令："
-echo "  service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh"
+echo "  service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh ; rm /usr/local/bin/hysteria_monitor.sh"
 echo "------------------------------------------------------------------------"
+
+# --- 添加崩溃检测和自动重启机制 ---
+echo -e "${YELLOW}正在设置 Hysteria 崩溃检测和自动重启...${NC}" >&2
+
+# 创建一个保活脚本
+MONITOR_SCRIPT="/usr/local/bin/hysteria_monitor.sh"
+cat > $MONITOR_SCRIPT << EOF
+#!/bin/bash
+
+while true; do
+    if ! pgrep -f "hysteria server" > /dev/null; then
+        echo "Hysteria 进程未运行，尝试重启..." >> /var/log/hysteria_monitor.log
+        service hysteria start
+    fi
+    sleep 15  # 每15秒检查一次
+done
+EOF
+
+chmod +x $MONITOR_SCRIPT
+
+# 将保活脚本添加到 OpenRC 服务中
+cat > /etc/init.d/hysteria_monitor << EOF
+#!/sbin/openrc-run
+name="hysteria_monitor"
+command="/usr/local/bin/hysteria_monitor.sh"
+command_background="yes"
+pidfile="/var/run/\${name}.pid"
+
+depend() {
+    need hysteria
+}
+
+start() {
+    ebegin "Starting \$name"
+    start-stop-daemon --start --quiet --background \\
+        --make-pidfile --pidfile \$pidfile \\
+        --exec \$command
+    eend \$?
+}
+
+stop() {
+    ebegin "Stopping \$name"
+    start-stop-daemon --stop --quiet --pidfile \$pidfile
+    eend \$?
+}
+EOF
+
+chmod +x /etc/init.d/hysteria_monitor
+
+# 启用并启动保活服务
+rc-update add hysteria_monitor default
+service hysteria_monitor start
+
+echo -e "${GREEN}Hysteria 崩溃检测和自动重启已设置完成。${NC}" >&2
