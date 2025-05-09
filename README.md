@@ -96,8 +96,11 @@ hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<inse
 service hysteria stop ; rc-update del hysteria ; rm /etc/init.d/hysteria ; rm /usr/local/bin/hysteria ; rm -rf /etc/hysteria ; rm hy2.sh
 ```
 
-1、安装完成后，脚本会显示此命令，您可以复制并在需要时执行。
-2、难民机安装完成后不要speedtest测速，测速必挂。
+⚠️难民机安装完成后不要speedtest测速，测速必挂。可以用下面指令重启。
+
+```bash
+service hysteria restart
+```
 
 ## 贡献指南
 
