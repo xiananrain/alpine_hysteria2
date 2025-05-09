@@ -239,7 +239,7 @@ echo -e "${YELLOW}创建具备自动重启能力的OpenRC服务...${NC}" >&2
 cat > /etc/init.d/hysteria << EOF
 #!/sbin/openrc-run
 name="hysteria"
-command="$HYSTERIA_BIN"
+command="/usr/local/bin/hysteria"
 command_args="server --config /etc/hysteria/config.yaml"
 pidfile="/var/run/\${name}.pid"
 output_log="/var/log/hysteria.log"
@@ -263,16 +263,20 @@ start_pre() {
 
 start() {
   ebegin "Starting \$name"
-  supervise-daemon --start \\
-    --pidfile \$pidfile \\
-    --stdout \$output_log --stderr \$error_log \\
-    --exec \$command -- \$command_args
+  supervise-daemon --start \
+    --name "\$name" \
+    --pidfile "\$pidfile" \
+    --stdout "\$output_log" \
+    --stderr "\$error_log" \
+    --exec "\$command" -- \$command_args
   eend \$?
 }
 
 stop() {
   ebegin "Stopping \$name"
-  supervise-daemon --stop --pidfile \$pidfile
+  supervise-daemon --stop \
+    --pidfile "\$pidfile" \
+    --exec "\$command"
   eend \$?
 }
 EOF
