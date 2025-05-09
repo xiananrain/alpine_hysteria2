@@ -268,39 +268,39 @@ echo -e "${GREEN}配置文件生成完毕。${NC}" >&2
 echo -e "${YELLOW}正在创建 OpenRC 服务文件 /etc/init.d/hysteria...${NC}" >&2
 cat > /etc/init.d/hysteria << EOF
 #!/sbin/openrc-run
-name="hysteria"
-command="/usr/local/bin/hysteria"
-command_args="server --config /etc/hysteria/config.yaml"
-pidfile="/var/run/\${name}.pid"
-output_log="/var/log/hysteria.log"
-error_log="/var/log/hysteria.error.log"
-supervisor="supervise"
-respawn_max=0
-respawn_delay=5
+name="hysteria" # 服务名称
+command="/usr/local/bin/hysteria" # Hysteria可执行文件路径
+command_args="server --config /etc/hysteria/config.yaml" # Hysteria启动参数
+pidfile="/var/run/\${name}.pid" # PID文件路径
+command_background="yes" # 后台运行
+output_log="/var/log/hysteria.log" # 标准输出日志
+error_log="/var/log/hysteria.error.log" # 错误输出日志
 
-depend() {
-  need net
-  after firewall
+depend() { # 依赖项
+  need net      # 需要网络服务
+  after firewall # 在防火墙服务之后启动
 }
 
-start_pre() {
-  checkpath -f \$output_log -m 0644
-  checkpath -f \$error_log -m 0644
+start_pre() { # 启动前执行的命令
+  checkpath -f \$output_log -m 0644 # 检查并创建日志文件，设置权限
+  checkpath -f \$error_log -m 0644 # 检查并创建错误日志文件，设置权限
 }
 
-start() {
-  ebegin "Starting \$name"
-  supervise-daemon --start --pidfile \$pidfile \\
+start() { # 启动服务函数
+  ebegin "Starting \$name" # 开始启动服务的提示
+  start-stop-daemon --start --quiet --background \\
+    --make-pidfile --pidfile \$pidfile \\
     --stdout \$output_log --stderr \$error_log \\
-    --exec \$command -- \$command_args
-  eend \$?
+    --exec \$command -- \$command_args # 启动进程
+  eend \$? # 结束启动服务的提示，并显示结果
 }
 
-stop() {
-    ebegin "Stopping \$name"
-    supervise-daemon --stop --pidfile \$pidfile
-    eend \$?
+stop() { # 停止服务函数
+    ebegin "Stopping \$name" # 开始停止服务的提示
+    start-stop-daemon --stop --quiet --pidfile \$pidfile # 停止进程
+    eend \$? # 结束停止服务的提示，并显示结果
 }
+# restart 命令由OpenRC通过调用stop然后start来处理
 EOF
 chmod +x /etc/init.d/hysteria # 赋予服务文件执行权限
 echo -e "${GREEN}OpenRC 服务文件创建成功。${NC}" >&2
