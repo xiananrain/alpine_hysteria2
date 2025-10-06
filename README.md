@@ -36,14 +36,14 @@ curl -fsSL https://raw.githubusercontent.com/xiananrain/alpine_hysteria2/main/hy
    - **自定义证书**：
      - 证书 (.crt) 文件绝对路径（留空则生成自签名证书）。
      - 私钥 (.key) 文件绝对路径。
-     - 用于自签名证书的伪装域名（如果选择生成自签名证书，默认 `www.bing.com`）。
+     - 用于自签名证书的伪装域名（如果选择生成自签名证书，默认 `www.iosapps.itunes.apple.com`）。
    - **ACME HTTP 验证**：
      - 您的域名（例如：`example.com`）。
      - 用于 ACME 证书申请的邮箱（默认生成随机邮箱，如 `xxxxxxxx@gmail.com`）。
 
 3. **端口**：Hysteria 2 监听的端口，默认为 `34567`。
 4. **密码**：用于身份验证的密码。如果不输入，将自动生成一个随机 UUID。
-5. **伪装访问的目标 URL**：用于伪装流量的目标 URL，默认为 `https://www.bing.com`。
+5. **伪装访问的目标 URL**：用于伪装流量的目标 URL，默认为 `https://www.iosapps.itunes.apple.com`。
 
 脚本将自动完成以下操作：
 
@@ -82,8 +82,8 @@ hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<inse
 
 - **端口**：`34567`
 - **密码**：随机生成的 UUID（如果未输入）
-- **伪装访问的目标 URL**：`https://www.bing.com`
-- **伪装域名（自签名证书）**：`www.bing.com`
+- **伪装访问的目标 URL**：`https://www.iosapps.itunes.apple.com`
+- **伪装域名（自签名证书）**：`www.iosapps.itunes.apple.com`
 - **ACME 邮箱**：随机生成的邮箱（如 `xxxxxxxx@gmail.com`，如果选择 ACME HTTP 验证）
 
 配置文件位于 `/etc/hysteria/config.yaml`，您可以手动编辑以进行高级配置。
