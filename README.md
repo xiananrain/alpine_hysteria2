@@ -7,7 +7,7 @@
 使用下面的命令一键安装并启动 Hysteria 2：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/1TIME1/alpine_hysteria2/main/hy2.sh -o hy2.sh && chmod +x hy2.sh && sh hy2.sh
+curl -fsSL https://raw.githubusercontent.com/xiananrain/alpine_hysteria2/main/hy2.sh -o hy2.sh && chmod +x hy2.sh && sh hy2.sh
 ```
 
 ## 功能特点
