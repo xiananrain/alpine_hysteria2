@@ -80,7 +80,7 @@ get_server_address() {
 
 
 # --- 用户输入 ---
-DEFAULT_MASQUERADE_URL="https://www.bing.com" # 默认伪装网址
+DEFAULT_MASQUERADE_URL="https://www.iosapps.itunes.apple.com" # 默认伪装网址
 DEFAULT_PORT="34567"
 DEFAULT_ACME_EMAIL="$(generate_random_lowercase_string)@gmail.com" # 默认ACME邮箱
 
@@ -107,8 +107,8 @@ case $TLS_TYPE in
                 echo -e "${RED}错误: openssl 未安装，请手动运行 'apk add openssl' 后重试${NC}" >&2
                 exit 1
             fi
-            read -p "请输入用于自签名证书的伪装域名 (默认 www.bing.com): " SELF_SIGN_SNI
-            SELF_SIGN_SNI=${SELF_SIGN_SNI:-"www.bing.com"} # 默认自签名SNI
+            read -p "请输入用于自签名证书的伪装域名 (默认 www.iosapps.itunes.apple.com): " SELF_SIGN_SNI
+            SELF_SIGN_SNI=${SELF_SIGN_SNI:-"www.iosapps.itunes.apple.com"} # 默认自签名SNI
             SNI="$SELF_SIGN_SNI"
             
             mkdir -p /etc/hysteria/certs # 创建证书存放目录
