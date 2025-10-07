@@ -81,7 +81,7 @@ get_server_address() {
 
 # --- 用户输入 ---
 DEFAULT_MASQUERADE_URL="https://www.iosapps.itunes.apple.com" # 默认伪装网址
-DEFAULT_PORT="34567"
+DEFAULT_PORT="50001"
 DEFAULT_ACME_EMAIL="$(generate_random_lowercase_string)@gmail.com" # 默认ACME邮箱
 
 echo "" >&2
