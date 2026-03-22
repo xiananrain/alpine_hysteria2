@@ -4,6 +4,10 @@
 
 ## 一键安装
 
+```bash
+apk update && apk add curl
+```
+
 使用下面的命令一键安装并启动 Hysteria 2：
 
 ```bash
