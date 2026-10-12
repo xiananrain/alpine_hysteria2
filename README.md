@@ -98,19 +98,20 @@ hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<inse
 配置文件位于 `/etc/hysteria/config.yaml`，您可以手动编辑以进行高级配置。
 
 ## 管理命令：
+```bash
+  service hysteria start  ``` - 启动服务
 
-  service hysteria start   - 启动服务
-  
+```bash  
   service hysteria stop    - 停止服务
-  
+```bash  
   service hysteria restart - 重启服务
-  
+```bash
   service hysteria status  - 查看状态
-  
+```bash
   cat /etc/hysteria/config.yaml - 查看配置文件
-  
+```bash
   tail -f /var/log/hysteria.log - 查看实时日志
-  
+```bash 
   tail -f /var/log/hysteria.error.log - 查看实时错误日志
   
 
