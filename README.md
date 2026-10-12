@@ -97,6 +97,15 @@ hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<inse
 
 配置文件位于 `/etc/hysteria/config.yaml`，您可以手动编辑以进行高级配置。
 
+## 管理命令：
+  service hysteria start   - 启动服务
+  service hysteria stop    - 停止服务
+  service hysteria restart - 重启服务
+  service hysteria status  - 查看状态
+  cat /etc/hysteria/config.yaml - 查看配置文件
+  tail -f /var/log/hysteria.log - 查看实时日志
+  tail -f /var/log/hysteria.error.log - 查看实时错误日志
+
 ## 卸载方法
 
 脚本提供了一键卸载命令，用于停止服务、删除自启动配置、移除二进制文件、删除配置文件目录以及删除脚本本身。卸载命令如下：
