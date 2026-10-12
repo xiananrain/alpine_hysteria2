@@ -99,11 +99,17 @@ hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<inse
 
 ## 管理命令：
 ``` service hysteria start  ``` - 启动服务
+
 ``` service hysteria stop ```   - 停止服务
+
 ``` service hysteria restart ``` - 重启服务
+
 ``` service hysteria status ``` - 查看状态
+
 ``` cat /etc/hysteria/config.yaml  ``` - 查看配置文件
+
 ``` tail -f /var/log/hysteria.log ``` - 查看实时日志
+
 ``` tail -f /var/log/hysteria.error.log ``` - 查看实时错误日志
   
 
