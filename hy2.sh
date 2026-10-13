@@ -46,6 +46,13 @@ generate_random_lowercase_string() {
     LC_ALL=C tr -dc 'a-z' < /dev/urandom | head -c 8
 }
 
+# 获取证书 SHA256 指纹（返回 64 位小写 hex，无冒号，供客户端 pinSHA256 证书锁定）
+# Xray 系客户端要求 hex 格式（base64 会报 encoding/hex 错误）
+get_cert_fingerprint() {
+    openssl x509 -in "$1" -noout -fingerprint -sha256 2>/dev/null \
+        | cut -d= -f2 | tr -d ':' | tr '[:upper:]' '[:lower:]'
+}
+
 # 获取服务器公网地址并格式化，优先使用IPv6
 get_server_address() {
     local ipv6_ip
@@ -115,9 +122,13 @@ case $TLS_TYPE in
             CERT_PATH="/etc/hysteria/certs/server.crt" # 自签名证书路径
             KEY_PATH="/etc/hysteria/certs/server.key" # 自签名私钥路径
             echo "正在生成自签名证书..." >&2
-            if ! openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
-                -keyout "$KEY_PATH" -out "$CERT_PATH" \
-                -subj "/CN=$SNI" -days 36500; then # 生成自签名证书
+            # 分两步生成（不用进程替换 <(...)，兼容 busybox ash / sh hy2.sh 的调用方式）
+            if ! openssl ecparam -name prime256v1 -genkey -noout -out "$KEY_PATH" 2>/dev/null; then
+                echo -e "${RED}错误: 自签名私钥生成失败，请检查 openssl 配置！${NC}" >&2
+                exit 1
+            fi
+            if ! openssl req -new -x509 -nodes -key "$KEY_PATH" \
+                -out "$CERT_PATH" -subj "/CN=$SNI" -days 36500 2>/dev/null; then # 生成自签名证书
                 echo -e "${RED}错误: 自签名证书生成失败，请检查 openssl 配置！${NC}" >&2
                 exit 1
             fi
@@ -148,6 +159,13 @@ case $TLS_TYPE in
             else
                 echo "从证书中提取到的 SNI (CN): $SNI" >&2
             fi
+        fi
+        # 提取证书 SHA256 指纹，用于客户端 pinSHA256（替代 allowInsecure）
+        CERT_PIN=$(get_cert_fingerprint "$CERT_PATH")
+        if [ -z "$CERT_PIN" ]; then
+            echo -e "${YELLOW}警告: 无法提取证书 SHA256 指纹，订阅链接将不含 pinSHA256。${NC}" >&2
+        else
+            echo -e "${GREEN}证书 SHA256 指纹 (pinSHA256): $CERT_PIN${NC}" >&2
         fi
         ;;
     2) # ACME HTTP 验证模式
@@ -328,7 +346,18 @@ else
     echo "  配置文件: cat /etc/hysteria/config.yaml"
 fi
 
-SUBSCRIPTION_LINK="hysteria2://${PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}#Hysteria-${SNI}" # 生成订阅链接
+SUBSCRIPTION_LINK_BASE="hysteria2://${PASSWORD}@${LINK_ADDRESS}:${PORT}/?sni=${LINK_SNI}&alpn=h3&insecure=${LINK_INSECURE}"
+# 自定义证书（尤其自签名）模式：在链接中携带 pinSHA256 证书指纹。
+# 这是 allowInsecure 被移除后的官方迁移路径：
+#  - 官方 hysteria2 客户端：insecure=1 + pinSHA256 时仍会校验指纹（非盲目跳过）；
+#  - Xray 系客户端（v2rayNG 等）：检测到 pinSHA256 后自动改用 pinnedPeerCertSha256，
+#    不再走已被新版 Xray-core 移除的 allowInsecure；
+#  - 老客户端：忽略 pinSHA256，行为与之前一致。
+if [ "$TLS_TYPE" -eq 1 ] && [ -n "$CERT_PIN" ]; then
+    SUBSCRIPTION_LINK="${SUBSCRIPTION_LINK_BASE}&pinSHA256=${CERT_PIN}#Hysteria-${SNI}"
+else
+    SUBSCRIPTION_LINK="${SUBSCRIPTION_LINK_BASE}#Hysteria-${SNI}"
+fi
 
 echo "" # 输出空行，用于格式化
 echo "------------------------------------------------------------------------"
@@ -346,9 +375,17 @@ elif [ "$TLS_TYPE" -eq 2 ]; then
     echo "ACME 邮箱: $ACME_EMAIL" # 如果是ACME模式，显示使用的邮箱
 fi
 echo "客户端 insecure (0=false, 1=true): $LINK_INSECURE"
+if [ -n "$CERT_PIN" ]; then
+    echo "证书 SHA256 指纹 (pinSHA256): $CERT_PIN"
+fi
 echo "------------------------------------------------------------------------"
 echo -e "${YELLOW}订阅链接 (Hysteria V2):${NC}"
 echo "$SUBSCRIPTION_LINK" # 输出订阅链接
+if [ -n "$CERT_PIN" ]; then
+    echo -e "${YELLOW}说明: 链接已内置 pinSHA256 证书指纹，客户端将按指纹校验服务端证书"
+    echo -e "（而非盲目跳过验证），兼容新版已移除 allowInsecure 的客户端。更换证书后"
+    echo -e "指纹会变化，请重新运行脚本生成新链接。${NC}"
+fi
 echo "------------------------------------------------------------------------"
 
 # 可选：显示二维码
