@@ -72,7 +72,7 @@ curl -L https://raw.githubusercontent.com/xiananrain/Install-Xray-Inbounds/main/
 脚本会生成一个 Hysteria 2 订阅链接，格式如下：
 
 ```
-hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<insecure>#Hysteria-<sni>
+hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<insecure>&pinSHA256=<cert_pin>#Hysteria-<sni>
 ```
 
 - `<server_address>`：服务器地址（IP 或域名）。
@@ -80,10 +80,9 @@ hysteria2://<password>@<server_address>:<port>/?sni=<sni>&alpn=h3&insecure=<inse
 - `<password>`：身份验证密码。
 - `<sni>`：TLS 握手时的 SNI（伪装域名）。
 - `<insecure>`：是否允许不安全的 TLS 连接（`0` 或 `1`）。
+- `<cert_pin>`：证书 SHA256 指纹（64 位小写 hex），自定义证书模式下脚本自动计算并写入链接。
 
-您可以将此链接导入支持 Hysteria 2 的客户端进行使用。
-
-**注意**：如果使用自定义证书（尤其是自签名证书），客户端通常需要设置 `insecure: true`。
+**allowInsecure 迁移说明**：新版 Xray-core 已移除 `allowInsecure`（跳过证书验证）选项。自定义证书（含自签名）模式下，脚本会在链接中携带 `pinSHA256` 证书指纹：官方 hysteria2 客户端在 `insecure=1 + pinSHA256` 时仍会校验指纹；Xray 系客户端（v2rayNG 等）检测到指纹后自动改用 `pinnedPeerCertSha256`，不再依赖已被移除的 `allowInsecure`。更换证书后指纹会变化，需重新运行脚本生成新链接。ACME 模式使用受信任证书，无需指纹。
 
 ## 配置选项
 
