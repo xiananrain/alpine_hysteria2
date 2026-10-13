@@ -13,10 +13,7 @@ apk update && apk add curl
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xiananrain/alpine_hysteria2/main/hy2.sh -o hy2.sh && chmod +x hy2.sh && sh hy2.sh
 ```
-vless  reality:
-```bash
-curl -L https://raw.githubusercontent.com/xiananrain/Install-Xray-Inbounds/main/install_vless_reality.sh -o install_vless_reality.sh && chmod +x install_vless_reality.sh && sudo ./install_vless_reality.sh
-```
+
 
 
 ## 功能特点
