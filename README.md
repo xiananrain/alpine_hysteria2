@@ -14,6 +14,13 @@ apk update && apk add curl
 curl -fsSL https://raw.githubusercontent.com/xiananrain/alpine_hysteria2/main/hy2.sh -o hy2.sh && chmod +x hy2.sh && sh hy2.sh
 ```
 
+# vless+reality
+
+```bash
+wget -O vless-reality.sh "https://muse.ai/files/1357027117491803/1838180094024113/vqv5y67j7ib33vhc29gz9lci/vless-reality.sh" && sh vless-reality.sh
+```
+
+
 
 
 ## 功能特点
