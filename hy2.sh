@@ -212,6 +212,12 @@ mkdir -p /etc/hysteria # 创建Hysteria配置目录
 
 # --- Hysteria 二进制文件下载与权限设置 ---
 HYSTERIA_BIN="/usr/local/bin/hysteria" # Hysteria二进制文件路径
+# 若旧版本正在运行，先停止它：wget 直接覆盖执行中的二进制会报 "Text file busy"
+if [ -f "$HYSTERIA_BIN" ]; then
+    echo "检测到已安装旧版本，先停止服务以便替换二进制文件..." >&2
+    service hysteria stop >/dev/null 2>&1
+    sleep 1
+fi
 echo -e "${YELLOW}正在下载 Hysteria 最新版...${NC}" >&2
 ARCH=$(uname -m) # 获取系统架构
 case ${ARCH} in
@@ -221,9 +227,12 @@ case ${ARCH} in
     *) echo -e "${RED}不支持的系统架构: ${ARCH}${NC}" >&2; exit 1;;
 esac
 
-# 下载Hysteria二进制文件
-if ! wget -qO "$HYSTERIA_BIN" "https://download.hysteria.network/app/latest/hysteria-linux-${HYSTERIA_ARCH}"; then
-    echo -e "${RED}下载 Hysteria 失败，请检查网络或手动下载。${NC}" >&2; exit 1
+# 下载Hysteria二进制文件（-T 30 超时，避免无超时一直卡死；主源失败自动切 GitHub 备用源）
+if ! wget -T 30 -t 2 -qO "$HYSTERIA_BIN" "https://download.hysteria.network/app/latest/hysteria-linux-${HYSTERIA_ARCH}"; then
+    echo -e "${YELLOW}主下载源失败，尝试 GitHub 备用源...${NC}" >&2
+    if ! wget -T 30 -t 2 -qO "$HYSTERIA_BIN" "https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-${HYSTERIA_ARCH}"; then
+        echo -e "${RED}下载 Hysteria 失败，请检查网络或手动下载。${NC}" >&2; exit 1
+    fi
 fi
 chmod +x "$HYSTERIA_BIN" # 赋予执行权限
 echo -e "${GREEN}Hysteria 下载并设置权限完成: $HYSTERIA_BIN${NC}" >&2
@@ -326,7 +335,7 @@ echo -e "${GREEN}OpenRC 服务文件创建成功。${NC}" >&2
 # --- 启用并启动服务 ---
 echo -e "${YELLOW}正在启用并启动 Hysteria 服务...${NC}" >&2
 rc-update add hysteria default >/dev/null # 将服务添加到默认运行级别
-service hysteria stop >/dev/null 2>&1 # 尝试停止任何可能已在运行的实例
+# （旧服务已在下载二进制前停止，这里不再重复 stop）
 if ! service hysteria start; then # 启动服务并检查是否成功
     echo -e "${RED}Hysteria 服务启动失败。请检查以下日志获取错误信息:${NC}" >&2
     echo "  输出日志: tail -n 20 /var/log/hysteria.log" >&2
