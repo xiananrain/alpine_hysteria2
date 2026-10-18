@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/xiananrain/alpine_hysteria2/main/hy
 # vless+reality
 
 ```bash
-wget -O vless-reality.sh "https://muse.ai/files/1357027117491803/1838180094024113/vqv5y67j7ib33vhc29gz9lci/vless-reality.sh" && sh vless-reality.sh
+wget -O vless-reality.sh "https://raw.githubusercontent.com/xiananrain/alpine_hysteria2/refs/heads/main/vless-reality.sh" && sh vless-reality.sh
 ```
 
 
